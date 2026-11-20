@@ -703,7 +703,8 @@ async function handleSaveAndPrint() {
       }
     }
 
-    document.getElementById("prevId").textContent = "ID: " + newItemId;
+    const prevIdEl = document.getElementById("prevId");
+    if (prevIdEl) prevIdEl.textContent = "ID: " + newItemId;
 
     // 2. Drukowanie przez Bluetooth w trybie graficznym (BITMAP)
     if (AppState.isPrinterConnected) {
@@ -962,77 +963,86 @@ function initSettingsModal() {
   }
 
   // Test A: TSPL (Standard DIRECTION 0 - bez obracania)
-  document.getElementById("btnTestTspl0").addEventListener("click", async () => {
-    try {
-      showToast("Wysyłanie Testu A (TSPL DIRECTION 0)...");
-      const lines = [
-        "SIZE 48 mm,30 mm",
-        "GAP 2 mm,0 mm",
-        "DENSITY 15",
-        "DIRECTION 0",
-        "CLS",
-        "BOX 5,5,375,225,4",
-        `TEXT 20,25,"3",0,1,1,"ZENWIRE TSPL TEST"`,
-        `QRCODE 25,65,L,4,A,0,"SP-00001"`,
-        `TEXT 160,75,"3",0,1,1,"ID: SP-00001"`,
-        `TEXT 160,115,"2",0,1,1,"Narty Salomon"`,
-        `TEXT 160,155,"3",0,1,1,"CENA: 650 PLN"`,
-        "PRINT 1",
-        ""
-      ];
-      await sendRawTsplToPrinter(new TextEncoder().encode(lines.join("\r\n")));
-      showToast("Test A (TSPL) wysłany! ✅");
-    } catch (err) {
-      alert("Błąd Testu A: " + err.message);
-    }
-  });
+  const btnTspl0 = document.getElementById("btnTestTspl0");
+  if (btnTspl0) {
+    btnTspl0.addEventListener("click", async () => {
+      try {
+        showToast("Wysyłanie Testu A (TSPL DIRECTION 0)...");
+        const lines = [
+          "SIZE 48 mm,30 mm",
+          "GAP 2 mm,0 mm",
+          "DENSITY 15",
+          "DIRECTION 0",
+          "CLS",
+          "BOX 5,5,375,225,4",
+          `TEXT 20,25,"3",0,1,1,"ZENWIRE TSPL TEST"`,
+          `QRCODE 25,65,L,4,A,0,"SP-00001"`,
+          `TEXT 160,75,"3",0,1,1,"ID: SP-00001"`,
+          `TEXT 160,115,"2",0,1,1,"Narty Salomon"`,
+          `TEXT 160,155,"3",0,1,1,"CENA: 650 PLN"`,
+          "PRINT 1",
+          ""
+        ];
+        await sendRawTsplToPrinter(new TextEncoder().encode(lines.join("\r\n")));
+        showToast("Test A (TSPL) wysłany! ✅");
+      } catch (err) {
+        alert("Błąd Testu A: " + err.message);
+      }
+    });
+  }
 
   // Test B: CPCL (Często domyślny protokół mobilnych drukarek etykiet Zebra / HPRT)
-  document.getElementById("btnTestCpcl").addEventListener("click", async () => {
-    try {
-      showToast("Wysyłanie Testu B (CPCL)...");
-      const lines = [
-        "! 0 200 200 240 1",
-        "PAGE-WIDTH 384",
-        "BOX 5 5 375 225 4",
-        "TEXT 4 0 20 25 TEST CPCL ZENWIRE",
-        "B QR 25 75 M 2 U 4",
-        "MA,SP-00001",
-        "ENDQR",
-        "TEXT 4 0 160 80 ID: SP-00001",
-        "TEXT 4 0 160 120 CENA: 650 PLN",
-        "FORM",
-        "PRINT",
-        ""
-      ];
-      await sendRawTsplToPrinter(new TextEncoder().encode(lines.join("\r\n")));
-      showToast("Test B (CPCL) wysłany! Sprawdź etykietę ✅");
-    } catch (err) {
-      alert("Błąd Testu B: " + err.message);
-    }
-  });
+  const btnCpcl = document.getElementById("btnTestCpcl");
+  if (btnCpcl) {
+    btnCpcl.addEventListener("click", async () => {
+      try {
+        showToast("Wysyłanie Testu B (CPCL)...");
+        const lines = [
+          "! 0 200 200 240 1",
+          "PAGE-WIDTH 384",
+          "BOX 5 5 375 225 4",
+          "TEXT 4 0 20 25 TEST CPCL ZENWIRE",
+          "B QR 25 75 M 2 U 4",
+          "MA,SP-00001",
+          "ENDQR",
+          "TEXT 4 0 160 80 ID: SP-00001",
+          "TEXT 4 0 160 120 CENA: 650 PLN",
+          "FORM",
+          "PRINT",
+          ""
+        ];
+        await sendRawTsplToPrinter(new TextEncoder().encode(lines.join("\r\n")));
+        showToast("Test B (CPCL) wysłany! Sprawdź etykietę ✅");
+      } catch (err) {
+        alert("Błąd Testu B: " + err.message);
+      }
+    });
+  }
 
   // Testowy wydruk w uniwersalnym trybie paragonowym (ESC/POS)
-  document.getElementById("btnTestEscPos").addEventListener("click", async () => {
-    try {
-      showToast("Wysyłanie testu tekstowego ESC/POS...");
-      const encoder = new TextEncoder();
-      const escPosData = [
-        0x1B, 0x40,       // ESC @ (Inicjalizacja drukarki)
-        0x1B, 0x61, 0x01, // Wyśrodkowanie tekstu
-        0x1D, 0x21, 0x11, // Podwójny rozmiar czcionki
-        ...Array.from(encoder.encode("ZENWIRE TP-210\r\n")),
-        0x1D, 0x21, 0x00, // Zwykły rozmiar czcionki
-        ...Array.from(encoder.encode("TEST TRYBU ESC/POS OK!\r\n")),
-        ...Array.from(encoder.encode("Drukarka termiczna dziala!\r\n")),
-        0x0A, 0x0A, 0x0A  // Wysuw 3 linii
-      ];
-      await sendRawTsplToPrinter(new Uint8Array(escPosData));
-      showToast("Test ESC/POS wysłany! ✅");
-    } catch (err) {
-      alert("Błąd testu ESC/POS: " + err.message);
-    }
-  });
+  const btnEscPos = document.getElementById("btnTestEscPos");
+  if (btnEscPos) {
+    btnEscPos.addEventListener("click", async () => {
+      try {
+        showToast("Wysyłanie testu tekstowego ESC/POS...");
+        const encoder = new TextEncoder();
+        const escPosData = [
+          0x1B, 0x40,       // ESC @ (Inicjalizacja drukarki)
+          0x1B, 0x61, 0x01, // Wyśrodkowanie tekstu
+          0x1D, 0x21, 0x11, // Podwójny rozmiar czcionki
+          ...Array.from(encoder.encode("ZENWIRE TP-210\r\n")),
+          0x1D, 0x21, 0x00, // Zwykły rozmiar czcionki
+          ...Array.from(encoder.encode("TEST TRYBU ESC/POS OK!\r\n")),
+          ...Array.from(encoder.encode("Drukarka termiczna dziala!\r\n")),
+          0x0A, 0x0A, 0x0A  // Wysuw 3 linii
+        ];
+        await sendRawTsplToPrinter(new Uint8Array(escPosData));
+        showToast("Test ESC/POS wysłany! ✅");
+      } catch (err) {
+        alert("Błąd testu ESC/POS: " + err.message);
+      }
+    });
+  }
 
   // Pobranie słowników z Google Sheets
   document.getElementById("btnSyncDictionaries").addEventListener("click", async () => {
