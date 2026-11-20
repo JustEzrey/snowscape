@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1e293b">
   <title>Ewidencja Sprzętu Sportowego</title>
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
   <!-- Biblioteka skanera kodów QR z aparatu -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- Lokalny, 100% offline generator kodów QR -->
-  <script src="qrcode.js?v=9"></script>
+  <script src="qrcode.js?v=10"></script>
 </head>
 <body>
   <div class="app-container">
@@ -302,6 +302,23 @@
               </div>
             </div>
 
+            <!-- Przyciski precyzyjnego przesuwania bez konieczności dotykania canvasu -->
+            <div class="nudge-container">
+              <span class="nudge-title">🎯 Precyzyjne przesuwanie (kliknij, aby przesunąć):</span>
+              <div class="nudge-row">
+                <button type="button" class="btn-nudge" data-nudge-x="-10">⬅️ -10</button>
+                <button type="button" class="btn-nudge" data-nudge-x="-2">◀️ -2</button>
+                <button type="button" class="btn-nudge" data-nudge-x="2">+2 ▶️</button>
+                <button type="button" class="btn-nudge" data-nudge-x="10">+10 ➡️</button>
+              </div>
+              <div class="nudge-row" style="margin-top: 6px;">
+                <button type="button" class="btn-nudge" data-nudge-y="-10">⬆️ -10</button>
+                <button type="button" class="btn-nudge" data-nudge-y="-2">▲ -2</button>
+                <button type="button" class="btn-nudge" data-nudge-y="2">▼ +2</button>
+                <button type="button" class="btn-nudge" data-nudge-y="10">⬇️ +10</button>
+              </div>
+            </div>
+
           </div>
 
           <!-- Przycisk testowego wydruku aktualnego szablonu -->
@@ -365,6 +382,6 @@
 
   </div>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

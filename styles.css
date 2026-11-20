@@ -359,6 +359,9 @@ label {
   flex-direction: column;
   align-items: center;
   position: relative;
+  touch-action: none; /* Blokuje domyślne przewijanie ekranu przy dotyku obszaru roboczego */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .canvas-ruler-header {
@@ -379,7 +382,9 @@ label {
   max-width: 384px;
   aspect-ratio: 50 / 30;
   display: block;
-  touch-action: none; /* Umożliwia precyzyjne przeciąganie palcem na telefonie */
+  touch-action: none; /* Kluczowe: zapobiega scrollowaniu strony podczas manipulacji na płótnie */
+  user-select: none;
+  -webkit-user-select: none;
   cursor: crosshair;
 }
 
@@ -475,7 +480,50 @@ label {
   font-weight: 600;
   cursor: pointer;
 }
-  margin-top: 1px;
+
+/* Przyciski precyzyjnego przesuwania */
+.nudge-container {
+  margin-top: 12px;
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.nudge-title {
+  display: block;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nudge-row {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-nudge {
+  flex: 1;
+  padding: 8px 4px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn-nudge:active {
+  background: #e2e8f0;
+  transform: scale(0.96);
 }
 
 .prev-price {

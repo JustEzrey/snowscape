@@ -1506,29 +1506,72 @@ function setupInspectorListeners() {
     updateInspectorUI();
     renderEditorCanvas();
   });
+
+  // Obsługa przycisków precyzyjnego przesuwania (Nudge)
+  document.querySelectorAll(".btn-nudge").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!AppState.selectedElementId) return;
+
+      const nudgeX = parseInt(btn.dataset.nudgeX, 10) || 0;
+      const nudgeY = parseInt(btn.dataset.nudgeY, 10) || 0;
+
+      if (AppState.selectedElementId === "__qr") {
+        if (nudgeX) AppState.editorTemplate.qrX = Math.max(0, Math.min(384 - (AppState.editorTemplate.qrSize || 135), (AppState.editorTemplate.qrX || 0) + nudgeX));
+        if (nudgeY) AppState.editorTemplate.qrY = Math.max(0, Math.min(240 - (AppState.editorTemplate.qrSize || 135), (AppState.editorTemplate.qrY || 0) + nudgeY));
+        const cx = document.getElementById("propCoordX");
+        const cy = document.getElementById("propCoordY");
+        if (cx) cx.value = AppState.editorTemplate.qrX;
+        if (cy) cy.value = AppState.editorTemplate.qrY;
+      } else {
+        const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+        if (el) {
+          if (nudgeX) el.x = Math.max(0, Math.min(380, el.x + nudgeX));
+          if (nudgeY) el.y = Math.max(10, Math.min(235, el.y + nudgeY));
+          const cx = document.getElementById("propCoordX");
+          const cy = document.getElementById("propCoordY");
+          if (cx) cx.value = el.x;
+          if (cy) cy.value = el.y;
+        }
+      }
+
+      renderEditorCanvas();
+    });
+  });
 }
 
 function setupCanvasPointerEvents(canvas) {
+  let pendingDrag = false;
+  let isDragging = false;
+  let dragStartPos = { x: 0, y: 0 };
+  let initialElemPos = { x: 0, y: 0 };
+  const DRAG_THRESHOLD = 8; // Wymagany ruch min. 8px, by uznać to za przeciąganie, a nie zwykłe tapnięcie
+
   function getCanvasCoords(e) {
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    let cx = e.clientX;
+    let cy = e.clientY;
+    if (cx === undefined && e.touches && e.touches[0]) {
+      cx = e.touches[0].clientX;
+      cy = e.touches[0].clientY;
+    }
     const scaleX = 384 / rect.width;
     const scaleY = 240 / rect.height;
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
+      x: (cx - rect.left) * scaleX,
+      y: (cy - rect.top) * scaleY
     };
   }
 
   function handlePointerDown(e) {
+    if (e.cancelable) e.preventDefault();
+
     const pos = getCanvasCoords(e);
     const tpl = AppState.editorTemplate;
     if (!tpl) return;
 
     let hitId = null;
 
-    // 1. Sprawdź elementy tekstowe i obrazy (od końca)
+    // 1. Sprawdź elementy tekstowe i obrazy (od wierzchu do spodu)
     const ctx = canvas.getContext("2d");
     for (let i = tpl.elements.length - 1; i >= 0; i--) {
       const el = tpl.elements[i];
@@ -1536,77 +1579,115 @@ function setupCanvasPointerEvents(canvas) {
         ctx.font = (el.bold ? "bold " : "") + (el.fontSize || 20) + "px Arial, sans-serif";
         const w = ctx.measureText(el.text).width;
         const h = el.fontSize || 20;
-        // Bounding box: [el.x - 4, el.y - h, w + 8, h + 4]
-        if (pos.x >= el.x - 6 && pos.x <= el.x + w + 6 && pos.y >= el.y - h - 4 && pos.y <= el.y + 4) {
+        // Bounding box z tolerancją na palec (+8px)
+        if (pos.x >= el.x - 8 && pos.x <= el.x + w + 8 && pos.y >= el.y - h - 8 && pos.y <= el.y + 8) {
           hitId = el.id;
-          AppState.initialElementX = el.x;
-          AppState.initialElementY = el.y;
+          initialElemPos = { x: el.x, y: el.y };
           break;
         }
       } else if (el.type === "image") {
-        if (pos.x >= el.x && pos.x <= el.x + el.width && pos.y >= el.y && pos.y <= el.y + el.height) {
+        if (pos.x >= el.x - 6 && pos.x <= el.x + el.width + 6 && pos.y >= el.y - 6 && pos.y <= el.y + el.height + 6) {
           hitId = el.id;
-          AppState.initialElementX = el.x;
-          AppState.initialElementY = el.y;
+          initialElemPos = { x: el.x, y: el.y };
           break;
         }
       }
     }
 
-    // 2. Jeśli nie kliknięto elementu, sprawdź kod QR
+    // 2. Jeśli nie trafiono w element, sprawdź kod QR
     if (!hitId && tpl.hasQr) {
       const qrX = tpl.qrX !== undefined ? tpl.qrX : 15;
       const qrY = tpl.qrY !== undefined ? tpl.qrY : 52;
       const qrSize = tpl.qrSize || 135;
-      if (pos.x >= qrX && pos.x <= qrX + qrSize && pos.y >= qrY && pos.y <= qrY + qrSize) {
+      if (pos.x >= qrX - 6 && pos.x <= qrX + qrSize + 6 && pos.y >= qrY - 6 && pos.y <= qrY + qrSize + 6) {
         hitId = "__qr";
-        AppState.initialElementX = qrX;
-        AppState.initialElementY = qrY;
+        initialElemPos = { x: qrX, y: qrY };
       }
     }
 
     AppState.selectedElementId = hitId;
-    if (hitId) {
-      AppState.isDragging = true;
-      AppState.dragStartX = pos.x;
-      AppState.dragStartY = pos.y;
-    }
-
     updateInspectorUI();
     renderEditorCanvas();
+
+    if (hitId) {
+      pendingDrag = true;
+      isDragging = false;
+      dragStartPos = { x: pos.x, y: pos.y };
+
+      // Przechwycenie zdarzeń wskaźnika – blokuje scrollowanie całej strony
+      if (canvas.setPointerCapture && e.pointerId !== undefined) {
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch (_) {}
+      }
+    } else {
+      pendingDrag = false;
+      isDragging = false;
+    }
   }
 
   function handlePointerMove(e) {
-    if (!AppState.isDragging || !AppState.selectedElementId) return;
+    if (!pendingDrag || !AppState.selectedElementId) return;
+    if (e.cancelable) e.preventDefault();
+
     const pos = getCanvasCoords(e);
-    const deltaX = Math.round(pos.x - AppState.dragStartX);
-    const deltaY = Math.round(pos.y - AppState.dragStartY);
+    const deltaX = pos.x - dragStartPos.x;
+    const deltaY = pos.y - dragStartPos.y;
+
+    // Przeciąganie rozpoczyna się tylko jeśli palec przesunął się o więcej niż DRAG_THRESHOLD
+    if (!isDragging) {
+      if (Math.hypot(deltaX, deltaY) >= DRAG_THRESHOLD) {
+        isDragging = true;
+      } else {
+        return; // Zwykłe tapnięcie/kliknięcie – nie ruszaj obiektu ani o 1px!
+      }
+    }
+
+    const targetX = Math.round(initialElemPos.x + deltaX);
+    const targetY = Math.round(initialElemPos.y + deltaY);
 
     if (AppState.selectedElementId === "__qr") {
-      AppState.editorTemplate.qrX = Math.max(0, Math.min(384 - (AppState.editorTemplate.qrSize || 135), AppState.initialElementX + deltaX));
-      AppState.editorTemplate.qrY = Math.max(0, Math.min(240 - (AppState.editorTemplate.qrSize || 135), AppState.initialElementY + deltaY));
-      document.getElementById("propCoordX").value = AppState.editorTemplate.qrX;
-      document.getElementById("propCoordY").value = AppState.editorTemplate.qrY;
+      AppState.editorTemplate.qrX = Math.max(0, Math.min(384 - (AppState.editorTemplate.qrSize || 135), targetX));
+      AppState.editorTemplate.qrY = Math.max(0, Math.min(240 - (AppState.editorTemplate.qrSize || 135), targetY));
+      const cx = document.getElementById("propCoordX");
+      const cy = document.getElementById("propCoordY");
+      if (cx) cx.value = AppState.editorTemplate.qrX;
+      if (cy) cy.value = AppState.editorTemplate.qrY;
     } else {
       const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
       if (el) {
-        el.x = Math.max(0, Math.min(380, AppState.initialElementX + deltaX));
-        el.y = Math.max(10, Math.min(235, AppState.initialElementY + deltaY));
-        document.getElementById("propCoordX").value = el.x;
-        document.getElementById("propCoordY").value = el.y;
+        el.x = Math.max(0, Math.min(380, targetX));
+        el.y = Math.max(10, Math.min(235, targetY));
+        const cx = document.getElementById("propCoordX");
+        const cy = document.getElementById("propCoordY");
+        if (cx) cx.value = el.x;
+        if (cy) cy.value = el.y;
       }
     }
 
     renderEditorCanvas();
   }
 
-  function handlePointerUp() {
-    AppState.isDragging = false;
+  function handlePointerEnd(e) {
+    pendingDrag = false;
+    isDragging = false;
+    if (canvas.hasPointerCapture && e.pointerId !== undefined && canvas.hasPointerCapture(e.pointerId)) {
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+    }
   }
 
-  canvas.addEventListener("pointerdown", handlePointerDown);
-  window.addEventListener("pointermove", handlePointerMove);
-  window.addEventListener("pointerup", handlePointerUp);
+  // Zdarzenia wskaźnika
+  canvas.addEventListener("pointerdown", handlePointerDown, { passive: false });
+  canvas.addEventListener("pointermove", handlePointerMove, { passive: false });
+  canvas.addEventListener("pointerup", handlePointerEnd);
+  canvas.addEventListener("pointercancel", handlePointerEnd);
+  canvas.addEventListener("lostpointercapture", handlePointerEnd);
+
+  // Dodatkowe zabezpieczenie dla zdarzeń dotykowych
+  canvas.addEventListener("touchstart", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+  canvas.addEventListener("touchmove", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 }
 
 // ================= POWIADOMIENIA (TOAST) =================
