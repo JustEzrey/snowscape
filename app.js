@@ -322,9 +322,114 @@ function buildTsplCommand(itemId, title, size, condition, price) {
 }
 
 /**
- * Bezpieczna wysyłka bajtów przez BLE
- * Kluczowe: pakiety po 20 bajtów + wybór właściwej metody zapisu (writeWithoutResponse vs write)
- * Zabezpieczenie przed zawieszeniem interfejsu (Promise timeout)
+ * Renderuje etykietę 50x30 mm na ukrytym Canvasie HTML5,
+ * konwertuje na 1-bitową monochromatyczną bitmapę i generuje komendę TSPL BITMAP.
+ * 
+ * ZALETY TRYBU BITMAP:
+ * 1. Działa na KAŻDEJ drukarce, nawet jeśli nie ma czcionek w pamięci ROM!
+ * 2. 100% polskie znaki (ą, ę, ś, ć, ł, ó, ż, ź) renderowane z telefonu.
+ * 3. Kod QR generowany bezpośrednio w aplikacji jako czyste piksele.
+ */
+async function generateTsplBitmapPayload(itemId, title, size, condition, price) {
+  const WIDTH_DOTS = 384; // 48 mm przy 203 DPI (podzielne przez 8: 48 bajtów)
+  const HEIGHT_DOTS = 240; // 30 mm przy 203 DPI
+  const WIDTH_BYTES = WIDTH_DOTS / 8; // 48 bajtów na wiersz
+
+  const canvas = document.createElement("canvas");
+  canvas.width = WIDTH_DOTS;
+  canvas.height = HEIGHT_DOTS;
+  const ctx = canvas.getContext("2d");
+
+  // 1. Białe tło
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, WIDTH_DOTS, HEIGHT_DOTS);
+
+  // 2. Czarna ramka dookoła
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(3, 3, WIDTH_DOTS - 6, HEIGHT_DOTS - 6);
+
+  // 3. Kod QR jako piksele
+  try {
+    if (window.QRCode) {
+      const qrCanvas = document.createElement("canvas");
+      await QRCode.toCanvas(qrCanvas, itemId, {
+        width: 130,
+        margin: 0,
+        errorCorrectionLevel: 'M'
+      });
+      ctx.drawImage(qrCanvas, 15, 55, 130, 130);
+    } else {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(15, 55, 130, 130);
+    }
+  } catch (e) {
+    console.error("QR Canvas error:", e);
+  }
+
+  // 4. Rysowanie tekstów bezpośrednio na Canvasie
+  ctx.fillStyle = "#000000";
+  ctx.textAlign = "left";
+
+  // ID
+  ctx.font = "bold 22px Arial, sans-serif";
+  ctx.fillText("ID: " + itemId, 15, 36);
+
+  // Nazwa / Model
+  ctx.font = "bold 22px Arial, sans-serif";
+  let displayTitle = title || "Nazwa sprzętu";
+  if (displayTitle.length > 17) displayTitle = displayTitle.substring(0, 16) + "…";
+  ctx.fillText(displayTitle, 160, 75);
+
+  // Rozmiar / Stan
+  ctx.font = "18px Arial, sans-serif";
+  let sub = [size, condition].filter(Boolean).join(" / ") || "Stan / Rozmiar";
+  if (sub.length > 20) sub = sub.substring(0, 19) + "…";
+  ctx.fillText(sub, 160, 115);
+
+  // Cena
+  ctx.font = "bold 26px Arial, sans-serif";
+  ctx.fillText("CENA: " + price + " PLN", 160, 175);
+
+  // 5. Konwersja Canvas -> 1-bitowa monochromatyczna tablica bajtów
+  const imgData = ctx.getImageData(0, 0, WIDTH_DOTS, HEIGHT_DOTS);
+  const pixels = imgData.data;
+  const bitmapBytes = new Uint8Array(WIDTH_BYTES * HEIGHT_DOTS);
+
+  for (let y = 0; y < HEIGHT_DOTS; y++) {
+    for (let byteX = 0; byteX < WIDTH_BYTES; byteX++) {
+      let byteVal = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const x = byteX * 8 + bit;
+        const idx = (y * WIDTH_DOTS + x) * 4;
+        const lum = pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114;
+        
+        // W standardzie TSPL BITMAP mode 0: bit 1 = punkt czarny (grzeje), 0 = biały
+        if (lum < 128) {
+          byteVal |= (0x80 >> bit);
+        }
+      }
+      bitmapBytes[y * WIDTH_BYTES + byteX] = byteVal;
+    }
+  }
+
+  // 6. Budowa pełnego pakietu TSPL z nagłówkiem BITMAP i stopką PRINT 1
+  const headerStr = `SIZE 48 mm,30 mm\r\nGAP 2 mm,0 mm\r\nDENSITY 15\r\nSPEED 2\r\nDIRECTION 0\r\nCLS\r\nBITMAP 0,0,${WIDTH_BYTES},${HEIGHT_DOTS},0,`;
+  const footerStr = `\r\nPRINT 1\r\n`;
+
+  const headerBytes = new TextEncoder().encode(headerStr);
+  const footerBytes = new TextEncoder().encode(footerStr);
+
+  const fullPayload = new Uint8Array(headerBytes.length + bitmapBytes.length + footerBytes.length);
+  fullPayload.set(headerBytes, 0);
+  fullPayload.set(bitmapBytes, headerBytes.length);
+  fullPayload.set(footerBytes, headerBytes.length + bitmapBytes.length);
+
+  return fullPayload;
+}
+
+/**
+ * Bezpieczna wysyłka bajtów przez BLE z podziałem na pakiety
  */
 async function sendRawTsplToPrinter(uint8Bytes) {
   if (!AppState.printerDevice) {
@@ -355,12 +460,12 @@ async function sendRawTsplToPrinter(uint8Bytes) {
   }
 
   const char = AppState.printerCharacteristic;
-  const CHUNK_SIZE = 20; // Limit pakietu BLE 4.0 ATT MTU
+  // Bezpieczny rozmiar pakietu (64 bajty przy writeWithoutResponse, 20 bajtów przy write)
+  const CHUNK_SIZE = char.properties.writeWithoutResponse ? 64 : 20;
 
   for (let offset = 0; offset < uint8Bytes.length; offset += CHUNK_SIZE) {
     const chunk = uint8Bytes.slice(offset, offset + CHUNK_SIZE);
     
-    // Zabezpieczenie przed zawieszeniem - max 2 sekundy na pakiet
     const writeOp = (async () => {
       if (char.properties.writeWithoutResponse) {
         await char.writeValueWithoutResponse(chunk);
@@ -372,11 +477,11 @@ async function sendRawTsplToPrinter(uint8Bytes) {
     })();
 
     const timeoutOp = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Limit czasu wysyłki Bluetooth (timeout)")), 2000)
+      setTimeout(() => reject(new Error("Limit czasu wysyłki Bluetooth (timeout)")), 3000)
     );
 
     await Promise.race([writeOp, timeoutOp]);
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, 15));
   }
 }
 
@@ -433,10 +538,11 @@ async function handleSaveAndPrint() {
 
     document.getElementById("prevId").textContent = "ID: " + newItemId;
 
-    // 2. Drukowanie przez Bluetooth
+    // 2. Drukowanie przez Bluetooth w trybie graficznym (BITMAP)
     if (AppState.isPrinterConnected) {
+      showToast(`Generowanie etykiety dla ${newItemId}...`);
+      const tsplBytes = await generateTsplBitmapPayload(newItemId, model, size, condition, sellPrice);
       showToast(`Drukowanie etykiety dla ${newItemId}...`);
-      const tsplBytes = buildTsplCommand(newItemId, model, size, condition, sellPrice);
       await sendRawTsplToPrinter(tsplBytes);
       showToast(`Wydrukowano etykietę: ${newItemId}! 🎉`, 3000);
     } else {
@@ -632,8 +738,8 @@ async function handleReprintCurrentItem() {
   if (!AppState.currentItem) return;
   const it = AppState.currentItem;
   try {
-    showToast("Drukowanie etykiety...");
-    const tsplBytes = buildTsplCommand(it.id, it.model, it.size, it.condition, it.sellPrice);
+    showToast("Generowanie i drukowanie etykiety...");
+    const tsplBytes = await generateTsplBitmapPayload(it.id, it.model, it.size, it.condition, it.sellPrice);
     await sendRawTsplToPrinter(tsplBytes);
     showToast("Etykieta wydrukowana!");
   } catch (err) {
@@ -665,6 +771,28 @@ function initSettingsModal() {
     modal.classList.add("hidden");
     showToast("Zapisano ustawienia!");
   });
+
+  // Główny test graficzny (BITMAP - niezależny od czcionek w ROM drukarki)
+  const btnBitmap = document.getElementById("btnTestBitmap");
+  if (btnBitmap) {
+    btnBitmap.addEventListener("click", async () => {
+      try {
+        showToast("Generowanie grafiki etykiety (BITMAP)...");
+        const payload = await generateTsplBitmapPayload(
+          "SP-00001",
+          "Narty Salomon X-Drive",
+          "165 cm",
+          "Ślizgi po serwisie",
+          "650"
+        );
+        showToast("Wysyłanie pikseli do głowicy...");
+        await sendRawTsplToPrinter(payload);
+        showToast("Wydruk BITMAP wysłany! Sprawdź etykietę ✅", 3000);
+      } catch (err) {
+        alert("Błąd testu BITMAP: " + err.message);
+      }
+    });
+  }
 
   // Test A: TSPL (Standard DIRECTION 0 - bez obracania)
   document.getElementById("btnTestTspl0").addEventListener("click", async () => {

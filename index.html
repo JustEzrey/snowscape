@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1e293b">
   <title>Ewidencja Sprzętu Sportowego</title>
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=5">
   <!-- Biblioteka skanera kodów QR z aparatu -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Biblioteka generowania kodów QR na Canvas -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -205,16 +207,16 @@
 
           <div class="form-group">
             <label>Diagnostyka Drukarki Zenwire TP-210</label>
+            <button class="btn-primary full-width" id="btnTestBitmap" style="margin-bottom: 8px; padding: 14px; font-weight: 700;">
+              🎨 TEST BITMAP (Grafika z telefonu - bez czcionek drukarki)
+            </button>
             <button class="btn-secondary full-width" id="btnTestTspl0">
-              🖨️ Test A: TSPL (Standard DIRECTION 0)
+              🖨️ Test A: TSPL Tekstowy (DIRECTION 0)
             </button>
-            <button class="btn-secondary full-width" id="btnTestCpcl" style="margin-top: 8px; background: #dbeafe; color: #1d4ed8; font-weight: bold;">
-              🚀 Test B: CPCL (Protokół mobilny dla TP-210)
+            <button class="btn-secondary full-width" id="btnTestCpcl" style="margin-top: 8px;">
+              🧾 Test B: CPCL Tekstowy
             </button>
-            <button class="btn-secondary full-width" id="btnTestEscPos" style="margin-top: 8px;">
-              🧾 Test C: ESC/POS (Tryb paragonowy)
-            </button>
-            <small class="hint">Sprawdźmy, który protokół jest natywny dla Twojej drukarki.</small>
+            <small class="hint">Tryb BITMAP generuje obrazek w telefonie i wysyła czyste piksele do głowicy.</small>
           </div>
 
           <div class="form-group">
@@ -236,6 +238,6 @@
 
   </div>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
