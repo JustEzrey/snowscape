@@ -297,19 +297,22 @@ function buildTsplCommand(itemId, title, size, condition, price) {
   if (title.length > 20) title = title.substring(0, 19) + "…";
   if (subText.length > 24) subText = subText.substring(0, 23) + "…";
 
-  // Czyste komendy TSPL z ramką diagnostyczną BOX i CRLF
+  // Czyste komendy TSPL z maksymalną gęstością i solidnym czarnym paskiem BAR
   const lines = [
     "SIZE 50 mm,30 mm",
     "GAP 3 mm,0 mm",
+    "DENSITY 15",
+    "SPEED 2",
     "DIRECTION 1",
     "CLS",
-    // Ramka testowa o grubości 3 punktów (dzięki niej od razu widać, że głowica grzeje)
-    "BOX 10,10,385,225,3",
-    `QRCODE 25,35,L,5,A,0,"${itemId}"`,
-    `TEXT 180,35,"3",0,1,1,"ID: ${itemId}"`,
-    `TEXT 180,75,"2",0,1,1,"${title}"`,
-    `TEXT 180,115,"2",0,1,1,"${subText}"`,
-    `TEXT 180,165,"3",0,1,1,"CENA: ${price} PLN"`,
+    // 1. Solidny czarny pasek na samej górze (360x20 punktów) - 100% pewny test grzania głowicy
+    "BAR 20,15,360,20",
+    // 2. Kody i teksty
+    `QRCODE 25,45,L,5,A,0,"${itemId}"`,
+    `TEXT 175,45,"3",0,1,1,"ID: ${itemId}"`,
+    `TEXT 175,85,"2",0,1,1,"${title}"`,
+    `TEXT 175,120,"2",0,1,1,"${subText}"`,
+    `TEXT 175,165,"3",0,1,1,"CENA: ${price} PLN"`,
     "PRINT 1,1",
     ""
   ];
@@ -320,8 +323,8 @@ function buildTsplCommand(itemId, title, size, condition, price) {
 
 /**
  * Bezpieczna wysyłka bajtów przez BLE
- * Kluczowe: pakiety po 20 bajtów (standard BLE ATT MTU = 23B z 20B payloadu)
- * Zapobiega ucinaniu komend i blokowaniu bufora drukarki
+ * Kluczowe: pakiety po 20 bajtów + wybór właściwej metody zapisu (writeWithoutResponse vs write)
+ * Zabezpieczenie przed zawieszeniem interfejsu (Promise timeout)
  */
 async function sendRawTsplToPrinter(uint8Bytes) {
   if (!AppState.printerDevice) {
@@ -329,17 +332,16 @@ async function sendRawTsplToPrinter(uint8Bytes) {
   }
 
   // Jeśli połączenie padło w tle, połącz ponownie
-  if (!AppState.printerDevice.gatt.connected) {
+  if (!AppState.printerDevice.gatt || !AppState.printerDevice.gatt.connected) {
     showToast("Wznawianie połączenia z Zenwire...");
     const server = await AppState.printerDevice.gatt.connect();
     
-    // Odnajdź charakterystykę zapisu
     let writeChar = null;
     const services = await server.getPrimaryServices();
     for (const service of services) {
       const chars = await service.getCharacteristics();
       for (const ch of chars) {
-        if (ch.properties.write || ch.properties.writeWithoutResponse) {
+        if (ch.properties.writeWithoutResponse || ch.properties.write) {
           writeChar = ch;
           break;
         }
@@ -353,30 +355,28 @@ async function sendRawTsplToPrinter(uint8Bytes) {
   }
 
   const char = AppState.printerCharacteristic;
-  const CHUNK_SIZE = 20; // Ścisły limit pakietu BLE 4.0
+  const CHUNK_SIZE = 20; // Limit pakietu BLE 4.0 ATT MTU
 
   for (let offset = 0; offset < uint8Bytes.length; offset += CHUNK_SIZE) {
     const chunk = uint8Bytes.slice(offset, offset + CHUNK_SIZE);
     
-    try {
-      if (char.writeValue) {
+    // Zabezpieczenie przed zawieszeniem - max 2 sekundy na pakiet
+    const writeOp = (async () => {
+      if (char.properties.writeWithoutResponse) {
+        await char.writeValueWithoutResponse(chunk);
+      } else if (char.properties.write) {
         await char.writeValue(chunk);
-      } else if (char.writeValueWithResponse) {
-        await char.writeValueWithResponse(chunk);
-      } else if (char.writeValueWithoutResponse) {
-        await char.writeValueWithoutResponse(chunk);
-      }
-    } catch (e) {
-      // Fallback jeśli writeValue zawiedzie
-      if (char.writeValueWithoutResponse) {
-        await char.writeValueWithoutResponse(chunk);
       } else {
-        throw e;
+        await char.writeValue(chunk);
       }
-    }
+    })();
 
-    // Krótka pauza między pakietami BLE
-    await new Promise(r => setTimeout(r, 25));
+    const timeoutOp = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Limit czasu wysyłki Bluetooth (timeout)")), 2000)
+    );
+
+    await Promise.race([writeOp, timeoutOp]);
+    await new Promise(r => setTimeout(r, 20));
   }
 }
 
@@ -666,10 +666,10 @@ function initSettingsModal() {
     showToast("Zapisano ustawienia!");
   });
 
-  // Testowy wydruk 50x30 mm z polskimi znakami
+  // Testowy wydruk 50x30 mm z polskimi znakami (TSPL)
   document.getElementById("btnTestPrint").addEventListener("click", async () => {
     try {
-      showToast("Wysyłanie testu do Zenwire TP-210...");
+      showToast("Wysyłanie testu TSPL do Zenwire TP-210...");
       const testBytes = buildTsplCommand(
         "SP-TEST",
         "Zażółć gęślą jaźń",
@@ -678,9 +678,31 @@ function initSettingsModal() {
         "999"
       );
       await sendRawTsplToPrinter(testBytes);
-      showToast("Test wydrukowany! Sprawdź etykietę ✅");
+      showToast("Test TSPL wysłany! Sprawdź etykietę ✅");
     } catch (err) {
       alert("Błąd wydruku testowego: " + err.message);
+    }
+  });
+
+  // Testowy wydruk w uniwersalnym trybie paragonowym (ESC/POS)
+  document.getElementById("btnTestEscPos").addEventListener("click", async () => {
+    try {
+      showToast("Wysyłanie testu tekstowego ESC/POS...");
+      const encoder = new TextEncoder();
+      const escPosData = [
+        0x1B, 0x40,       // ESC @ (Inicjalizacja drukarki)
+        0x1B, 0x61, 0x01, // Wyśrodkowanie tekstu
+        0x1D, 0x21, 0x11, // Podwójny rozmiar czcionki
+        ...Array.from(encoder.encode("ZENWIRE TP-210\r\n")),
+        0x1D, 0x21, 0x00, // Zwykły rozmiar czcionki
+        ...Array.from(encoder.encode("TEST TRYBU ESC/POS OK!\r\n")),
+        ...Array.from(encoder.encode("Drukarka termiczna dziala!\r\n")),
+        0x0A, 0x0A, 0x0A  // Wysuw 3 linii
+      ];
+      await sendRawTsplToPrinter(new Uint8Array(escPosData));
+      showToast("Test ESC/POS wysłany! ✅");
+    } catch (err) {
+      alert("Błąd testu ESC/POS: " + err.message);
     }
   });
 
