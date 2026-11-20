@@ -26,8 +26,9 @@ QRCode.prototype = {
     make: function() {
         if (this.typeNumber < 1) {
             var typeNumber = 1;
-            for (; typeNumber < 40; typeNumber++) {
+            for (; typeNumber <= 10; typeNumber++) {
                 var rsBlocks = QRUtil.getRSBlockTable(typeNumber, this.errorCorrectLevel);
+                if (!rsBlocks) break;
                 var buffer = new QRBitBuffer();
                 for (var i = 0; i < this.dataList.length; i++) {
                     var data = this.dataList[i];
@@ -262,13 +263,7 @@ var QRUtil = {
         return digit;
     },
     getRSBlockTable: function(typeNumber, errorCorrectLevel) {
-        switch (errorCorrectLevel) {
-            case QRCode.ErrorCorrectLevel.L: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
-            case QRCode.ErrorCorrectLevel.M: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
-            case QRCode.ErrorCorrectLevel.Q: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
-            case QRCode.ErrorCorrectLevel.H: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
-            default: return null;
-        }
+        return QRRSBlock.getRSBlocks(typeNumber, errorCorrectLevel);
     },
     createData: function(typeNumber, errorCorrectLevel, dataList) {
         var rsBlocks = QRUtil.getRSBlockTable(typeNumber, errorCorrectLevel);
@@ -385,15 +380,54 @@ QRPolynomial.prototype = {
     }
 };
 
-var QRRSBlock = {
-    RS_BLOCK_TABLE: [
-        [1, 26, 19], [1, 26, 16], [1, 26, 13], [1, 26, 9],
-        [1, 44, 34], [1, 44, 28], [1, 44, 22], [1, 44, 16],
-        [1, 70, 55], [1, 70, 44], [2, 35, 17], [2, 35, 13],
-        [1, 100, 80], [2, 50, 32], [2, 50, 24], [4, 25, 9],
-        [2, 64, 48], [4, 36, 19], [2, 36, 16], [4, 36, 12],
-        [2, 86, 58], [4, 43, 22], [4, 43, 18], [4, 43, 14]
-    ]
+function QRRSBlock(totalCount, dataCount) {
+    this.totalCount = totalCount;
+    this.dataCount = dataCount;
+}
+
+QRRSBlock.RS_BLOCK_TABLE = [
+    // 1
+    [1, 26, 19], [1, 26, 16], [1, 26, 13], [1, 26, 9],
+    // 2
+    [1, 44, 34], [1, 44, 28], [1, 44, 22], [1, 44, 16],
+    // 3
+    [1, 70, 55], [1, 70, 44], [2, 35, 17], [2, 35, 13],
+    // 4
+    [1, 100, 80], [2, 50, 32], [2, 50, 24], [4, 25, 9],
+    // 5
+    [1, 134, 108], [2, 67, 43], [2, 33, 15, 2, 34, 16], [2, 33, 11, 2, 34, 12],
+    // 6
+    [2, 86, 68], [4, 43, 27], [4, 43, 19], [4, 43, 15],
+    // 7
+    [2, 98, 78], [4, 39, 31], [2, 32, 14, 4, 33, 15], [4, 39, 13, 1, 40, 14],
+    // 8
+    [2, 121, 97], [2, 60, 38, 2, 61, 39], [4, 40, 18, 2, 41, 19], [4, 40, 14, 2, 41, 15],
+    // 9
+    [2, 146, 116], [3, 58, 36, 2, 59, 37], [4, 36, 16, 4, 37, 17], [4, 36, 12, 4, 37, 13],
+    // 10
+    [2, 86, 68, 2, 87, 69], [4, 69, 43, 1, 70, 44], [6, 43, 19, 2, 44, 20], [6, 43, 15, 2, 44, 16]
+];
+
+QRRSBlock.getRSBlocks = function(typeNumber, errorCorrectLevel) {
+    if (typeNumber < 1 || typeNumber > 10) return null;
+    var row = null;
+    switch (errorCorrectLevel) {
+        case QRCode.ErrorCorrectLevel.L: row = QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0]; break;
+        case QRCode.ErrorCorrectLevel.M: row = QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1]; break;
+        case QRCode.ErrorCorrectLevel.Q: row = QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2]; break;
+        case QRCode.ErrorCorrectLevel.H: row = QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3]; break;
+    }
+    if (!row) return null;
+    var list = [];
+    for (var i = 0; i < row.length; i += 3) {
+        var count = row[i];
+        var totalCount = row[i + 1];
+        var dataCount = row[i + 2];
+        for (var j = 0; j < count; j++) {
+            list.push(new QRRSBlock(totalCount, dataCount));
+        }
+    }
+    return list;
 };
 
 function getBestMaskPattern(qrCode) {
@@ -440,3 +474,9 @@ QRUtil.getLostPoint = function(qrCode) {
     }
     return lostPoint;
 };
+
+if (typeof window !== "undefined") {
+    window.QRCode = QRCode;
+} else if (typeof globalThis !== "undefined") {
+    globalThis.QRCode = QRCode;
+}

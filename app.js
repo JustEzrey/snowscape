@@ -1080,8 +1080,16 @@ function initTemplateEditor() {
   const currentActive = getActiveTemplate();
   AppState.editorTemplate = JSON.parse(JSON.stringify(currentActive));
 
+  function updateEditorToggles() {
+    const borderStatus = document.getElementById("labelBorderStatus");
+    if (borderStatus && AppState.editorTemplate) borderStatus.textContent = AppState.editorTemplate.hasBorder ? "WŁ" : "WYŁ";
+    const qrStatus = document.getElementById("labelQrStatus");
+    if (qrStatus && AppState.editorTemplate) qrStatus.textContent = AppState.editorTemplate.hasQr ? "WŁ" : "WYŁ";
+  }
+
   // Zsynchronizuj selecty szablonów
   populateTemplateSelects();
+  updateEditorToggles();
 
   // Zdarzenia wyboru szablonu w edytorze
   const selectEditor = document.getElementById("selectEditorTemplate");
@@ -1091,6 +1099,7 @@ function initTemplateEditor() {
       if (found) {
         AppState.editorTemplate = JSON.parse(JSON.stringify(found));
         AppState.selectedElementId = null;
+        updateEditorToggles();
         updateInspectorUI();
         renderEditorCanvas();
       }
@@ -1114,10 +1123,13 @@ function initTemplateEditor() {
     } else {
       AppState.templates.push(JSON.parse(JSON.stringify(AppState.editorTemplate)));
     }
+    // Ustaw od razu ten szablon jako aktywny do drukowania na przyjęciu
+    AppState.activeTemplateId = AppState.editorTemplate.id;
     localStorage.setItem("sport_templates", JSON.stringify(AppState.templates));
+    localStorage.setItem("sport_active_template_id", AppState.activeTemplateId);
     populateTemplateSelects();
     updateLabelPreview();
-    showToast(`Zapisano szablon "${AppState.editorTemplate.name}"! 💾`);
+    showToast(`Zapisano i aktywowano szablon "${AppState.editorTemplate.name}"! 💾`);
   });
 
   // Nowy pusty szablon

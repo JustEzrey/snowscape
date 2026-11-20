@@ -6,7 +6,80 @@
  *  - Oznaczanie jako sprzedane
  *  - Pobieranie danych pojedynczego przedmiotu po ID
  *  - Pobieranie aktualnych list słownikowych
+ *  - Auto-instalator arkuszy 'Magazyn' i 'Slowniki' (setupSpreadsheet)
  */
+
+/**
+ * Funkcja jednorazowej inicjalizacji (można uruchomić ręcznie lub wykona się automatycznie przy 1. zapisie).
+ */
+function setupSpreadsheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. Arkusz Magazyn
+  var magSheet = ss.getSheetByName("Magazyn");
+  if (!magSheet) {
+    magSheet = ss.insertSheet("Magazyn");
+  }
+  
+  var magHeaders = [
+    "ID",
+    "Data_Przyjecia",
+    "Kategoria",
+    "Model",
+    "Rozmiar",
+    "Stan",
+    "Cena_Zakupu",
+    "Cena_Sprzedazy",
+    "Status",
+    "Data_Sprzedazy"
+  ];
+  
+  if (magSheet.getLastRow() === 0) {
+    magSheet.appendRow(magHeaders);
+    var hRange = magSheet.getRange(1, 1, 1, magHeaders.length);
+    hRange.setFontWeight("bold");
+    hRange.setBackground("#1e293b");
+    hRange.setFontColor("#ffffff");
+    magSheet.setFrozenRows(1);
+  }
+  
+  // 2. Arkusz Słowniki
+  var dictSheet = ss.getSheetByName("Slowniki");
+  if (!dictSheet) {
+    dictSheet = ss.insertSheet("Slowniki");
+  }
+  
+  var dictHeaders = ["Kategorie", "Modele", "Stany"];
+  if (dictSheet.getLastRow() === 0) {
+    dictSheet.appendRow(dictHeaders);
+    var dRange = dictSheet.getRange(1, 1, 1, dictHeaders.length);
+    dRange.setFontWeight("bold");
+    dRange.setBackground("#2563eb");
+    dRange.setFontColor("#ffffff");
+    dictSheet.setFrozenRows(1);
+    
+    var sampleCategories = ["Narciarstwo", "Snowboard", "Kolarstwo", "Fitness", "Rolki / Łyżwy", "Turystyka"];
+    var sampleModels = ["Salomon X-Drive", "Atomic Redster", "Head Supershape", "Rossignol Hero", "Trek Marlin", "Kross Hexagon"];
+    var sampleConditions = ["Bardzo dobry", "Po serwisie", "Nowy / Jak nowy", "Widoczne ślady użytkowania", "Drobne otarcia", "Do serwisu"];
+    
+    var maxLen = Math.max(sampleCategories.length, sampleModels.length, sampleConditions.length);
+    for (var i = 0; i < maxLen; i++) {
+      dictSheet.appendRow([
+        sampleCategories[i] || "",
+        sampleModels[i] || "",
+        sampleConditions[i] || ""
+      ]);
+    }
+  }
+  
+  // Usuń domyślny pusty "Arkusz1" / "Sheet1" jeśli są inne
+  var defaultSheet = ss.getSheetByName("Arkusz1") || ss.getSheetByName("Sheet1");
+  if (defaultSheet && ss.getSheets().length > 1) {
+    try { ss.deleteSheet(defaultSheet); } catch (e) {}
+  }
+  
+  return "Konfiguracja arkuszy zakończona sukcesem!";
+}
 
 function doGet(e) {
   var params = e ? e.parameter : {};
@@ -49,7 +122,8 @@ function handleAddItem(data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName("Magazyn");
   if (!sheet) {
-    return jsonResponse({ success: false, message: "Brak arkusza 'Magazyn'" });
+    setupSpreadsheet();
+    sheet = ss.getSheetByName("Magazyn");
   }
   
   var lastRow = sheet.getLastRow();
@@ -200,6 +274,10 @@ function handleGetItem(id) {
 function handleGetDictionaries() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var dictSheet = ss.getSheetByName("Slowniki");
+  if (!dictSheet) {
+    setupSpreadsheet();
+    dictSheet = ss.getSheetByName("Slowniki");
+  }
   
   var categories = [];
   var models = [];
