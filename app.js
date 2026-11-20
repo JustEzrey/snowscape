@@ -290,48 +290,93 @@ function encodeWindows1250(str) {
 
 /**
  * Generuje ciąg instrukcji TSPL dla etykiety 50x30 mm
+ * Używa ściśle zakończeń \r\n (CRLF) wymaganych przez mikrokontrolery drukarek
  */
 function buildTsplCommand(itemId, title, size, condition, price) {
   let subText = [size, condition].filter(Boolean).join(" / ");
-  // Skróć teksty, jeśli są za długie na 50mm szerokości
-  if (title.length > 22) title = title.substring(0, 21) + "…";
-  if (subText.length > 25) subText = subText.substring(0, 24) + "…";
+  if (title.length > 20) title = title.substring(0, 19) + "…";
+  if (subText.length > 24) subText = subText.substring(0, 23) + "…";
 
-  // Szablon TSPL: 203 DPI, 50x30mm = 400x240 dots
-  const tspl = 
-`SIZE 50 mm, 30 mm
-GAP 3 mm, 0 mm
-DIRECTION 1
-CODEPAGE 1250
-CLS
-QRCODE 20,25,L,5,A,0,"${itemId}"
-TEXT 175,25,"3",0,1,1,"ID: ${itemId}"
-TEXT 175,68,"2",0,1,1,"${title}"
-TEXT 175,108,"2",0,1,1,"${subText}"
-TEXT 175,155,"3",0,1,1,"CENA: ${price} PLN"
-PRINT 1,1
-`;
-  return encodeWindows1250(tspl);
+  // Czyste komendy TSPL z ramką diagnostyczną BOX i CRLF
+  const lines = [
+    "SIZE 50 mm,30 mm",
+    "GAP 3 mm,0 mm",
+    "DIRECTION 1",
+    "CLS",
+    // Ramka testowa o grubości 3 punktów (dzięki niej od razu widać, że głowica grzeje)
+    "BOX 10,10,385,225,3",
+    `QRCODE 25,35,L,5,A,0,"${itemId}"`,
+    `TEXT 180,35,"3",0,1,1,"ID: ${itemId}"`,
+    `TEXT 180,75,"2",0,1,1,"${title}"`,
+    `TEXT 180,115,"2",0,1,1,"${subText}"`,
+    `TEXT 180,165,"3",0,1,1,"CENA: ${price} PLN"`,
+    "PRINT 1,1",
+    ""
+  ];
+
+  const tsplString = lines.join("\r\n");
+  return encodeWindows1250(tsplString);
 }
 
 /**
- * Bezpieczna wysyłka bajtów przez BLE z podziałem na pakiety (MTU chunking)
+ * Bezpieczna wysyłka bajtów przez BLE
+ * Kluczowe: pakiety po 20 bajtów (standard BLE ATT MTU = 23B z 20B payloadu)
+ * Zapobiega ucinaniu komend i blokowaniu bufora drukarki
  */
 async function sendRawTsplToPrinter(uint8Bytes) {
-  if (!AppState.isPrinterConnected || !AppState.printerCharacteristic) {
-    throw new Error("Drukarka nie jest połączona. Kliknij ikonę błyskawicy ⚡ u góry.");
+  if (!AppState.printerDevice) {
+    throw new Error("Drukarka nie jest wybrana. Kliknij ikonę błyskawicy ⚡.");
   }
 
-  const CHUNK_SIZE = 100; // Bezpieczny rozmiar pakietu BLE
+  // Jeśli połączenie padło w tle, połącz ponownie
+  if (!AppState.printerDevice.gatt.connected) {
+    showToast("Wznawianie połączenia z Zenwire...");
+    const server = await AppState.printerDevice.gatt.connect();
+    
+    // Odnajdź charakterystykę zapisu
+    let writeChar = null;
+    const services = await server.getPrimaryServices();
+    for (const service of services) {
+      const chars = await service.getCharacteristics();
+      for (const ch of chars) {
+        if (ch.properties.write || ch.properties.writeWithoutResponse) {
+          writeChar = ch;
+          break;
+        }
+      }
+      if (writeChar) break;
+    }
+    if (!writeChar) throw new Error("Nie można odnaleźć charakterystyki zapisu.");
+    AppState.printerCharacteristic = writeChar;
+    AppState.isPrinterConnected = true;
+    updatePrinterUI(true, AppState.printerDevice.name);
+  }
+
+  const char = AppState.printerCharacteristic;
+  const CHUNK_SIZE = 20; // Ścisły limit pakietu BLE 4.0
+
   for (let offset = 0; offset < uint8Bytes.length; offset += CHUNK_SIZE) {
     const chunk = uint8Bytes.slice(offset, offset + CHUNK_SIZE);
-    if (AppState.printerCharacteristic.writeValueWithoutResponse) {
-      await AppState.printerCharacteristic.writeValueWithoutResponse(chunk);
-    } else {
-      await AppState.printerCharacteristic.writeValue(chunk);
+    
+    try {
+      if (char.writeValue) {
+        await char.writeValue(chunk);
+      } else if (char.writeValueWithResponse) {
+        await char.writeValueWithResponse(chunk);
+      } else if (char.writeValueWithoutResponse) {
+        await char.writeValueWithoutResponse(chunk);
+      }
+    } catch (e) {
+      // Fallback jeśli writeValue zawiedzie
+      if (char.writeValueWithoutResponse) {
+        await char.writeValueWithoutResponse(chunk);
+      } else {
+        throw e;
+      }
     }
-    // Krótka pauza zapobiegająca przepełnieniu bufora drukarki
-    await new Promise(r => setTimeout(r, 20));
+
+    // Krótka pauza między pakietami BLE
+    await new Promise(r => setTimeout(r, 25));
   }
 }
 
