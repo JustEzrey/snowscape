@@ -322,6 +322,47 @@ function buildTsplCommand(itemId, title, size, condition, price) {
 }
 
 /**
+ * Rysuje kod QR bezpośrednio na płótnie Canvas bez żadnych zewnętrznych zależności (100% offline).
+ */
+function drawQrCodeToCanvas(ctx, text, startX, startY, targetSize) {
+  try {
+    // Inicjalizacja biblioteki qrcode.js: typeNumber 0 = auto, ErrorCorrection M
+    const qr = new QRCode(0, QRCode.ErrorCorrectLevel.M);
+    qr.addData(text);
+    qr.make();
+
+    const count = qr.getModuleCount();
+    const cellSize = targetSize / count;
+
+    // Białe tło pod kodem QR
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(startX, startY, targetSize, targetSize);
+
+    // Rysowanie czarnych modułów kodu QR
+    ctx.fillStyle = "#000000";
+    for (let row = 0; row < count; row++) {
+      for (let col = 0; col < count; col++) {
+        if (qr.isDark(row, col)) {
+          const x = Math.round(startX + col * cellSize);
+          const y = Math.round(startY + row * cellSize);
+          const w = Math.round(startX + (col + 1) * cellSize) - x;
+          const h = Math.round(startY + (row + 1) * cellSize) - y;
+          ctx.fillRect(x, y, w, h);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Błąd generowania kodu QR:", err);
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(startX, startY, targetSize, targetSize);
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 14px Arial";
+    ctx.fillText("QR ERR", startX + 15, startY + targetSize / 2);
+  }
+}
+
+/**
  * Renderuje etykietę 50x30 mm na ukrytym Canvasie HTML5,
  * konwertuje na 1-bitową monochromatyczną bitmapę i generuje komendę TSPL BITMAP.
  * 
@@ -349,23 +390,8 @@ async function generateTsplBitmapPayload(itemId, title, size, condition, price) 
   ctx.lineWidth = 3;
   ctx.strokeRect(3, 3, WIDTH_DOTS - 6, HEIGHT_DOTS - 6);
 
-  // 3. Kod QR jako piksele
-  try {
-    if (window.QRCode) {
-      const qrCanvas = document.createElement("canvas");
-      await QRCode.toCanvas(qrCanvas, itemId, {
-        width: 130,
-        margin: 0,
-        errorCorrectionLevel: 'M'
-      });
-      ctx.drawImage(qrCanvas, 15, 55, 130, 130);
-    } else {
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(15, 55, 130, 130);
-    }
-  } catch (e) {
-    console.error("QR Canvas error:", e);
-  }
+  // 3. Kod QR rysowany bezpośrednio jako ostre piksele na płótnie
+  drawQrCodeToCanvas(ctx, itemId, 15, 52, 135);
 
   // 4. Rysowanie tekstów bezpośrednio na Canvasie
   ctx.fillStyle = "#000000";
