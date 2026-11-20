@@ -392,21 +392,23 @@ async function generateTsplBitmapPayload(itemId, title, size, condition, price) 
   ctx.fillText("CENA: " + price + " PLN", 160, 175);
 
   // 5. Konwersja Canvas -> 1-bitowa monochromatyczna tablica bajtów
+  // DLA ZENWIRE TP-210: bit 1 = brak grzania (BIAŁY), bit 0 = grzanie (CZARNY)
   const imgData = ctx.getImageData(0, 0, WIDTH_DOTS, HEIGHT_DOTS);
   const pixels = imgData.data;
   const bitmapBytes = new Uint8Array(WIDTH_BYTES * HEIGHT_DOTS);
 
   for (let y = 0; y < HEIGHT_DOTS; y++) {
     for (let byteX = 0; byteX < WIDTH_BYTES; byteX++) {
-      let byteVal = 0;
+      let byteVal = 0xFF; // Domyślnie wszystkie bity = 1 (czyste BIAŁE tło, brak grzania)
       for (let bit = 0; bit < 8; bit++) {
         const x = byteX * 8 + bit;
         const idx = (y * WIDTH_DOTS + x) * 4;
         const lum = pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114;
         
-        // W standardzie TSPL BITMAP mode 0: bit 1 = punkt czarny (grzeje), 0 = biały
+        // Jeśli piksel na canvasie jest czarny (napis, kod QR, ramka):
+        // Zerujemy bit (0 = igła głowicy rozgrzewa się i wypala czarny punkt)
         if (lum < 128) {
-          byteVal |= (0x80 >> bit);
+          byteVal &= ~(0x80 >> bit);
         }
       }
       bitmapBytes[y * WIDTH_BYTES + byteX] = byteVal;
