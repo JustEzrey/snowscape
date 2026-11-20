@@ -1,0 +1,9 @@
+{
+  "appId": "com.sportinventory.app",
+  "appName": "SportInventory",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

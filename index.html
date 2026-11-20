@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1e293b">
+  <title>Ewidencja Sprzętu Sportowego</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Biblioteka skanera kodów QR z aparatu -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Pasek nagłówka i statusu drukarki Zenwire TP-210 -->
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-icon">🏷️</span>
+        <span class="brand-title">SportInventory</span>
+      </div>
+      <div class="printer-badge" id="printerBadge">
+        <span class="status-dot disconnected" id="printerDot"></span>
+        <span class="printer-name" id="printerStatusText">Zenwire: Rozłączona</span>
+        <button class="btn-icon" id="btnConnectPrinter" title="Połącz z drukarką">⚡</button>
+      </div>
+      <button class="btn-icon" id="btnOpenSettings" title="Ustawienia">⚙️</button>
+    </header>
+
+    <!-- Nawigacja górna (Zakładki) -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="tab-intake">
+        <span class="tab-icon">📥</span>
+        <span>Przyjęcie na stan</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-scanner">
+        <span class="tab-icon">📷</span>
+        <span>Skaner / Sprzedaż</span>
+      </button>
+    </nav>
+
+    <!-- Główna zawartość -->
+    <main class="tab-content">
+      
+      <!-- ================= ZAKŁADKA 1: PRZYJĘCIE NA STAN ================= -->
+      <section id="tab-intake" class="tab-pane active">
+        <form id="intakeForm" autocomplete="off" onsubmit="return false;">
+          
+          <!-- Kategoria -->
+          <div class="form-group">
+            <label for="inputCategory">Kategoria</label>
+            <div class="combobox-wrapper">
+              <input type="text" id="inputCategory" class="form-input" placeholder="Wybierz lub wpisz nową..." required>
+              <div class="dropdown-list" id="listCategory"></div>
+            </div>
+          </div>
+
+          <!-- Marka i Model -->
+          <div class="form-group">
+            <label for="inputModel">Marka i Model sprzętu</label>
+            <div class="combobox-wrapper">
+              <input type="text" id="inputModel" class="form-input" placeholder="np. Salomon X-Drive, Kross Hexagon..." required>
+              <div class="dropdown-list" id="listModel"></div>
+            </div>
+          </div>
+
+          <!-- Rozmiar / Wariant -->
+          <div class="form-group">
+            <label for="inputSize">Rozmiar / Wariant</label>
+            <div class="combobox-wrapper">
+              <input type="text" id="inputSize" class="form-input" placeholder="np. 165 cm, Rama L, Skorupa 305mm...">
+              <div class="dropdown-list" id="listSize"></div>
+            </div>
+          </div>
+
+          <!-- Stan / Uwagi -->
+          <div class="form-group">
+            <label for="inputCondition">Stan techniczny / Uwagi</label>
+            <div class="combobox-wrapper">
+              <input type="text" id="inputCondition" class="form-input" placeholder="np. Po serwisie, Nowy, Drobne otarcia...">
+              <div class="dropdown-list" id="listCondition"></div>
+            </div>
+          </div>
+
+          <!-- Ceny w dwóch kolumnach -->
+          <div class="grid-2">
+            <div class="form-group">
+              <label for="inputBuyPrice">Cena zakupu (PLN)</label>
+              <input type="number" id="inputBuyPrice" class="form-input" step="1" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label for="inputSellPrice">Cena sprzedaży (PLN) *</label>
+              <input type="number" id="inputSellPrice" class="form-input price-highlight" step="1" placeholder="0.00" required>
+            </div>
+          </div>
+
+          <!-- Podgląd etykiety 50x30mm przed wydrukiem -->
+          <div class="label-preview-card">
+            <div class="preview-header">
+              <span>Podgląd etykiety (50x30 mm)</span>
+              <span class="preview-format">TSPL 203 DPI</span>
+            </div>
+            <div class="label-preview-box">
+              <div class="qr-mock" id="previewQr">QR</div>
+              <div class="label-text-mock">
+                <div class="prev-id" id="prevId">ID: SP-AUTO</div>
+                <div class="prev-title" id="prevTitle">Nazwa sprzętu</div>
+                <div class="prev-sub" id="prevDetails">Rozmiar / Stan</div>
+                <div class="prev-price" id="prevPrice">CENA: 0 PLN</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Główny przycisk akcji -->
+          <div class="action-bar">
+            <button type="button" class="btn-primary" id="btnSaveAndPrint">
+              <span class="btn-icon-lg">🖨️</span>
+              <span class="btn-text">
+                <strong>ZAPISZ I DRUKUJ</strong>
+                <small>Zapis do Sheets + Etykieta Bluetooth</small>
+              </span>
+            </button>
+          </div>
+
+        </form>
+      </section>
+
+      <!-- ================= ZAKŁADKA 2: SKANER / SPRZEDAŻ ================= -->
+      <section id="tab-scanner" class="tab-pane">
+        
+        <div class="scanner-card">
+          <div class="camera-viewport-wrapper">
+            <div id="qrReader" class="camera-stream"></div>
+            <div class="reticle-overlay">
+              <div class="reticle-box"></div>
+              <p class="reticle-hint">Skieruj aparat na kod QR z etykiety</p>
+            </div>
+          </div>
+
+          <div class="scanner-controls">
+            <button class="btn-secondary" id="btnToggleCamera">
+              <span id="cameraBtnText">📷 Uruchom aparat</span>
+            </button>
+            <div class="manual-search-row">
+              <input type="text" id="manualIdInput" class="form-input" placeholder="Wpisz ID ręcznie (np. SP-00001)">
+              <button class="btn-secondary" id="btnManualSearch">Szukaj</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wynik skanowania: Karta Przedmiotu -->
+        <div class="item-card hidden" id="itemCard">
+          <div class="card-status-pill" id="cardStatusBadge">Dostępny</div>
+          <div class="card-header">
+            <span class="card-id" id="cardItemId">SP-00001</span>
+            <span class="card-date" id="cardItemDate">2026-11-20</span>
+          </div>
+          <h2 class="card-title" id="cardItemTitle">Narty Salomon X-Drive</h2>
+          <div class="card-details-grid">
+            <div class="detail-item">
+              <span class="detail-label">Kategoria:</span>
+              <span class="detail-value" id="cardItemCategory">Narciarstwo</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Wariant:</span>
+              <span class="detail-value" id="cardItemSize">165 cm</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Stan:</span>
+              <span class="detail-value" id="cardItemCondition">Po serwisie</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Cena:</span>
+              <span class="detail-value price" id="cardItemPrice">650 PLN</span>
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <button class="btn-sell" id="btnMarkAsSold">
+              🛒 OZNACZ JAKO SPRZEDANE
+            </button>
+            <button class="btn-reprint" id="btnReprintLabel" title="Wydrukuj etykietę ponownie">
+              🖨️ Drukuj ponownie
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Modal Ustawień -->
+    <div class="modal-overlay hidden" id="settingsModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>Ustawienia Systemu</h3>
+          <button class="btn-close" id="btnCloseSettings">&times;</button>
+        </div>
+        <div class="modal-body">
+          
+          <div class="form-group">
+            <label for="settingScriptUrl">Google Apps Script Web App URL</label>
+            <input type="url" id="settingScriptUrl" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
+            <small class="hint">Wklej link po wdrożeniu skryptu jako aplikacja internetowa.</small>
+          </div>
+
+          <div class="form-group">
+            <label>Test Drukarki Zenwire TP-210 (50x30 mm)</label>
+            <button class="btn-secondary full-width" id="btnTestPrint">
+              🖨️ Wydrukuj etykietę testową z polskimi znakami
+            </button>
+            <small class="hint">Drukuje test polskich liter (ą, ę, ś, ć, ł, ó, ż, ź) i kod QR.</small>
+          </div>
+
+          <div class="form-group">
+            <label>Słowniki podpowiedzi</label>
+            <button class="btn-secondary full-width" id="btnSyncDictionaries">
+              🔄 Pobierz słowniki z Google Sheets
+            </button>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary" id="btnSaveSettings">Zapisz ustawienia</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pływające powiadomienia (Toast) -->
+    <div id="toastNotification" class="toast hidden"></div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

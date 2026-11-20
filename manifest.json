@@ -1,0 +1,16 @@
+{
+  "name": "Ewidencja Sprzętu Sportowego",
+  "short_name": "SportInventory",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1e293b",
+  "theme_color": "#1e293b",
+  "description": "System ewidencji sprzętu sportowego z etykietami 50x30 mm TSPL i skanerem QR",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232563eb'/><text x='50%' y='55%' font-size='50' text-anchor='middle' dominant-baseline='central'>🏷️</text></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
