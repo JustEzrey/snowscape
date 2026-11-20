@@ -3,11 +3,12 @@
  * 
  * Arkusze:
  * 1. 'Magazyn' - baza przyjętych i sprzedanych przedmiotów
- *    Kolumny: ID_Przedmiotu | Data_Przyjecia | Kategoria | Rodzaj | Rozmiar | Stan | Opis | Cena_Zakupu | Cena_Sprzedazy | Status | Data_Sprzedazy
+ *    Kolumny: ID_Przedmiotu | Data_Przyjecia | Kategoria | Marka | Rodzaj | Rozmiar | Stan | Opis | Cena_Zakupu | Cena_Sprzedazy | Status | Data_Sprzedazy
  * 2. 'Slowniki' - dynamiczne słowniki powiązań:
  *    Kol A-B: Kategoria -> Rodzaj
  *    Kol D-E: Rodzaj -> Rozmiar
  *    Kol G: Stan
+ *    Kol I: Marka
  */
 
 function setupSpreadsheet() {
@@ -21,6 +22,7 @@ function setupSpreadsheet() {
     "ID_Przedmiotu",
     "Data_Przyjecia",
     "Kategoria",
+    "Marka",
     "Rodzaj",
     "Rozmiar",
     "Stan",
@@ -45,10 +47,11 @@ function setupSpreadsheet() {
       "SP-00001",
       today,
       "Narciarstwo",
+      "Salomon",
       "Narty",
       "165 cm",
       "Po serwisie",
-      "Salomon X-Drive 8.0 z wiązaniami",
+      "X-Drive 8.0 z wiązaniami",
       400,
       650,
       "Dostępny",
@@ -66,6 +69,7 @@ function setupSpreadsheet() {
     dictSheet.getRange(1, 4).setValue("Rodzaj_Dla_Rozmiaru");
     dictSheet.getRange(1, 5).setValue("Rozmiar");
     dictSheet.getRange(1, 7).setValue("Stan");
+    dictSheet.getRange(1, 9).setValue("Marka");
     
     var h1 = dictSheet.getRange("A1:B1");
     h1.setFontWeight("bold").setBackground("#2563eb").setFontColor("#ffffff");
@@ -73,6 +77,8 @@ function setupSpreadsheet() {
     h2.setFontWeight("bold").setBackground("#0284c7").setFontColor("#ffffff");
     var h3 = dictSheet.getRange("G1");
     h3.setFontWeight("bold").setBackground("#0d9488").setFontColor("#ffffff");
+    var h4 = dictSheet.getRange("I1");
+    h4.setFontWeight("bold").setBackground("#7c3aed").setFontColor("#ffffff");
     dictSheet.setFrozenRows(1);
     
     // Dane domyślne: Kategoria -> Rodzaj
@@ -133,6 +139,16 @@ function setupSpreadsheet() {
       ["Do serwisu"]
     ];
     dictSheet.getRange(2, 7, stany.length, 1).setValues(stany);
+
+    // Dane domyślne: Marki
+    var marki = [
+      ["Salomon"], ["Head"], ["Atomic"], ["Rossignol"], ["Fischer"], ["Völkl"], ["Blizzard"], ["Nordica"], ["Dynastar"],
+      ["Burton"], ["Nitro"], ["Ride"], ["Bataleon"], ["Capita"], ["Jones"],
+      ["Trek"], ["Giant"], ["Kross"], ["Specialized"], ["Scott"], ["Cube"], ["Cannondale"], ["Merida"], ["Romet"],
+      ["Rollerblade"], ["K2"], ["Powerslide"], ["Tempish"], ["Bauer"], ["CCM"],
+      ["The North Face"], ["Columbia"], ["Deuter"], ["Osprey"], ["Salewa"], ["Jack Wolfskin"], ["Inna"]
+    ];
+    dictSheet.getRange(2, 9, marki.length, 1).setValues(marki);
   }
   
   // Usuń domyślny pusty Arkusz1 / Sheet1 jeśli są już inne
@@ -211,18 +227,22 @@ function handleAddItem(data) {
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
   
   var category = (data.category || "").trim();
+  var brand = (data.brand || data.marka || "").trim();
   var rodzaj = (data.rodzaj || "").trim();
   var size = (data.size || "").trim();
   var condition = (data.condition || "").trim();
-  var opis = (data.opis || data.model || "").trim();
+  var opis = (data.opis || "").trim();
   var buyPrice = data.buyPrice ? Number(data.buyPrice) : 0;
   var sellPrice = data.sellPrice ? Number(data.sellPrice) : 0;
   var status = "Dostępny";
   
+  // 12 kolumn w tabeli Magazyn:
+  // 1: ID_Przedmiotu | 2: Data_Przyjecia | 3: Kategoria | 4: Marka | 5: Rodzaj | 6: Rozmiar | 7: Stan | 8: Opis | 9: Cena_Zakupu | 10: Cena_Sprzedazy | 11: Status | 12: Data_Sprzedazy
   sheet.appendRow([
     newId,
     today,
     category,
+    brand,
     rodzaj,
     size,
     condition,
@@ -233,8 +253,8 @@ function handleAddItem(data) {
     ""
   ]);
   
-  // Automatycznie zaktualizuj słowniki nowymi wartościami
-  updateDictionaries(ss, category, rodzaj, size, condition);
+  // Automatycznie zaktualizuj słowniki nowymi wartościami (jeśli wpisano nowe)
+  updateDictionaries(ss, category, brand, rodzaj, size, condition);
   
   return jsonResponse({
     success: true,
@@ -245,6 +265,7 @@ function handleAddItem(data) {
       id: newId,
       date: today,
       category: category,
+      brand: brand,
       rodzaj: rodzaj,
       size: size,
       condition: condition,
@@ -275,10 +296,10 @@ function handleSellItem(id) {
   
   if (targetRow === -1) return jsonResponse({ success: false, message: "Nie znaleziono przedmiotu: " + id });
   
-  // SAMA DATA BEZ GODZINY
+  // SAMA DATA BEZ GODZINY: YYYY-MM-DD
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-  sheet.getRange(targetRow, 10).setValue("Sprzedany"); // Kolumna Status (10)
-  sheet.getRange(targetRow, 11).setValue(today);       // Kolumna Data_Sprzedazy (11)
+  sheet.getRange(targetRow, 11).setValue("Sprzedany"); // Kolumna Status (11)
+  sheet.getRange(targetRow, 12).setValue(today);       // Kolumna Data_Sprzedazy (12)
   
   return jsonResponse({
     success: true,
@@ -295,7 +316,8 @@ function handleGetItem(id) {
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return jsonResponse({ success: false, message: "Brak danych w magazynie" });
   
-  var data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  // Pobierz 12 kolumn
+  var data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
   for (var i = 0; i < data.length; i++) {
     if (data[i][0].toString().trim().toUpperCase() === id.toString().trim().toUpperCase()) {
       return jsonResponse({
@@ -304,14 +326,15 @@ function handleGetItem(id) {
           id: data[i][0],
           date: formatDateOnly(data[i][1]),
           category: data[i][2],
-          rodzaj: data[i][3],
-          size: data[i][4],
-          condition: data[i][5],
-          opis: data[i][6],
-          buyPrice: data[i][7],
-          sellPrice: data[i][8],
-          status: data[i][9],
-          soldDate: formatDateOnly(data[i][10])
+          brand: data[i][3],
+          rodzaj: data[i][4],
+          size: data[i][5],
+          condition: data[i][6],
+          opis: data[i][7],
+          buyPrice: data[i][8],
+          sellPrice: data[i][9],
+          status: data[i][10],
+          soldDate: formatDateOnly(data[i][11])
         }
       });
     }
@@ -329,14 +352,15 @@ function handleGetDictionaries() {
   }
   
   var categories = [];
+  var brands = [];
   var categoryRodzaje = {}; // { "Narciarstwo": ["Narty", "Buty"] }
   var rodzajRozmiary = {};  // { "Narty": ["150 cm", "155 cm"] }
   var conditions = [];
   
   var lastRow = dictSheet.getLastRow();
   if (lastRow > 1) {
-    // Odczytaj kolumny A:G
-    var values = dictSheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    // Odczytaj kolumny A:I (9 kolumn)
+    var values = dictSheet.getRange(2, 1, lastRow - 1, 9).getValues();
     
     for (var i = 0; i < values.length; i++) {
       var cat = values[i][0] ? values[i][0].toString().trim() : "";
@@ -344,6 +368,7 @@ function handleGetDictionaries() {
       var forRodz = values[i][3] ? values[i][3].toString().trim() : "";
       var size = values[i][4] ? values[i][4].toString().trim() : "";
       var cond = values[i][6] ? values[i][6].toString().trim() : "";
+      var br = values[i][8] ? values[i][8].toString().trim() : "";
       
       if (cat) {
         if (categories.indexOf(cat) === -1) categories.push(cat);
@@ -361,6 +386,10 @@ function handleGetDictionaries() {
       if (cond && conditions.indexOf(cond) === -1) {
         conditions.push(cond);
       }
+
+      if (br && brands.indexOf(br) === -1) {
+        brands.push(br);
+      }
     }
   }
   
@@ -368,6 +397,7 @@ function handleGetDictionaries() {
     success: true,
     dictionaries: {
       categories: categories.length ? categories : ["Narciarstwo", "Snowboard", "Kolarstwo", "Rolki / Łyżwy", "Turystyka", "Inne"],
+      brands: brands.length ? brands : ["Salomon", "Head", "Atomic", "Rossignol", "Fischer", "Völkl", "Blizzard", "Nordica", "Burton", "Trek", "Kross", "Rollerblade", "K2"],
       categoryRodzaje: categoryRodzaje,
       rodzajRozmiary: rodzajRozmiary,
       conditions: conditions.length ? conditions : ["Nowy", "Używany", "Bardzo dobry", "Po serwisie", "Do serwisu"]
@@ -376,12 +406,12 @@ function handleGetDictionaries() {
 }
 
 // 5. Automatyczna aktualizacja słowników przy wpisaniu nowej wartości w aplikacji
-function updateDictionaries(ss, category, rodzaj, size, condition) {
+function updateDictionaries(ss, category, brand, rodzaj, size, condition) {
   var dictSheet = ss.getSheetByName("Slowniki");
   if (!dictSheet) return;
   
   var lastRow = Math.max(dictSheet.getLastRow(), 2);
-  var values = dictSheet.getRange(2, 1, lastRow, 7).getValues();
+  var values = dictSheet.getRange(2, 1, lastRow, 9).getValues();
   
   // 1. Sprawdź parę Kategoria -> Rodzaj
   if (category && rodzaj) {
@@ -444,6 +474,26 @@ function updateDictionaries(ss, category, rodzaj, size, condition) {
     if (!foundCond) {
       var targetRowG = nextEmptyRowG !== -1 ? nextEmptyRowG : dictSheet.getLastRow() + 1;
       dictSheet.getRange(targetRowG, 7).setValue(condition);
+    }
+  }
+
+  // 4. Sprawdź Markę (kolumna I)
+  if (brand) {
+    var foundBrand = false;
+    var nextEmptyRowI = -1;
+    for (var m = 0; m < values.length; m++) {
+      var br = values[m][8].toString().trim().toLowerCase();
+      if (br === brand.toLowerCase()) {
+        foundBrand = true;
+        break;
+      }
+      if (!values[m][8] && nextEmptyRowI === -1) {
+        nextEmptyRowI = m + 2;
+      }
+    }
+    if (!foundBrand) {
+      var targetRowI = nextEmptyRowI !== -1 ? nextEmptyRowI : dictSheet.getLastRow() + 1;
+      dictSheet.getRange(targetRowI, 9).setValue(brand);
     }
   }
 }

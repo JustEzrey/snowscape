@@ -20,7 +20,7 @@ const DEFAULT_TEMPLATES = [
     qrSize: 135,
     elements: [
       { id: "el_id", type: "text", text: "ID: {ID}", x: 15, y: 36, fontSize: 22, bold: true },
-      { id: "el_rodzaj", type: "text", text: "{RODZAJ} {OPIS}", x: 160, y: 75, fontSize: 22, bold: true },
+      { id: "el_title", type: "text", text: "{MARKA} {RODZAJ}", x: 160, y: 75, fontSize: 22, bold: true },
       { id: "el_sub", type: "text", text: "{ROZMIAR} / {STAN}", x: 160, y: 115, fontSize: 18, bold: false },
       { id: "el_price", type: "text", text: "CENA: {CENA} PLN", x: 160, y: 175, fontSize: 26, bold: true }
     ]
@@ -35,7 +35,7 @@ const DEFAULT_TEMPLATES = [
     qrSize: 170,
     elements: [
       { id: "el_promo", type: "text", text: "★ SUPER OKAZJA ★", x: 195, y: 40, fontSize: 20, bold: true },
-      { id: "el_rodzaj", type: "text", text: "{RODZAJ} {OPIS}", x: 195, y: 75, fontSize: 20, bold: false },
+      { id: "el_title", type: "text", text: "{MARKA} {RODZAJ}", x: 195, y: 75, fontSize: 20, bold: false },
       { id: "el_id", type: "text", text: "ID: {ID}", x: 195, y: 110, fontSize: 16, bold: false },
       { id: "el_price", type: "text", text: "{CENA} PLN", x: 195, y: 170, fontSize: 34, bold: true }
     ]
@@ -50,7 +50,7 @@ const DEFAULT_TEMPLATES = [
     qrSize: 140,
     elements: [
       { id: "el_brand", type: "text", text: "SPORT-SERVICE", x: 15, y: 35, fontSize: 22, bold: true },
-      { id: "el_rodzaj", type: "text", text: "{RODZAJ} {OPIS}", x: 15, y: 75, fontSize: 20, bold: true },
+      { id: "el_title", type: "text", text: "{MARKA} {RODZAJ}", x: 15, y: 75, fontSize: 20, bold: true },
       { id: "el_sub", type: "text", text: "{STAN} ({ROZMIAR})", x: 15, y: 110, fontSize: 17, bold: false },
       { id: "el_price", type: "text", text: "{CENA} PLN", x: 15, y: 160, fontSize: 26, bold: true },
       { id: "el_id", type: "text", text: "ID: {ID}", x: 15, y: 200, fontSize: 16, bold: false }
@@ -61,6 +61,13 @@ const DEFAULT_TEMPLATES = [
 // ================= DOMYŚLNE SŁOWNIKI KASKADOWE =================
 const DEFAULT_DICTIONARIES = {
   categories: ["Narciarstwo", "Snowboard", "Kolarstwo", "Rolki / Łyżwy", "Turystyka", "Inne"],
+  brands: [
+    "Salomon", "Head", "Atomic", "Rossignol", "Fischer", "Völkl", "Blizzard", "Nordica", "Dynastar",
+    "Burton", "Nitro", "Ride", "Bataleon", "Capita", "Jones",
+    "Trek", "Giant", "Kross", "Specialized", "Scott", "Cube", "Cannondale", "Merida", "Romet",
+    "Rollerblade", "K2", "Powerslide", "Tempish", "Bauer", "CCM",
+    "The North Face", "Columbia", "Deuter", "Osprey", "Salewa", "Jack Wolfskin", "Inna"
+  ],
   categoryRodzaje: {
     "Narciarstwo": ["Narty", "Buty", "Kijki", "Kask", "Gogle"],
     "Snowboard": ["Deska", "Buty SB", "Wiązania", "Kask", "Gogle"],
@@ -95,15 +102,50 @@ function loadStoredDictionaries() {
   if (!stored) return JSON.parse(JSON.stringify(DEFAULT_DICTIONARIES));
   try {
     const parsed = JSON.parse(stored);
-    if (!parsed.categoryRodzaje || !parsed.rodzajRozmiary) {
-      return {
-        categories: (parsed.categories && parsed.categories.length) ? parsed.categories : DEFAULT_DICTIONARIES.categories,
-        categoryRodzaje: { ...DEFAULT_DICTIONARIES.categoryRodzaje, ...(parsed.categoryRodzaje || {}) },
-        rodzajRozmiary: { ...DEFAULT_DICTIONARIES.rodzajRozmiary, ...(parsed.rodzajRozmiary || {}) },
-        conditions: (parsed.conditions && parsed.conditions.length) ? parsed.conditions : DEFAULT_DICTIONARIES.conditions
-      };
+    
+    // Lista znanych marek do oczyszczenia z categoryRodzaje
+    const knownBrands = [
+      "Salomon", "Head", "Atomic", "Rossignol", "Fischer", "Völkl", "Volkl", "Blizzard", "Nordica", 
+      "Burton", "Nitro", "Ride", "Bataleon", "Capita", "Jones",
+      "Trek", "Giant", "Kross", "Specialized", "Scott", "Cube", "Cannondale", "Merida", "Romet",
+      "Rollerblade", "K2", "Powerslide", "Tempish", "Bauer", "CCM",
+      "The North Face", "Columbia", "Deuter", "Osprey", "Salewa", "Jack Wolfskin"
+    ];
+    
+    let brands = parsed.brands && Array.isArray(parsed.brands) && parsed.brands.length ? parsed.brands : [];
+    if (parsed.models && Array.isArray(parsed.models)) {
+      parsed.models.forEach(m => {
+        const brandMatch = knownBrands.find(b => m.toLowerCase().includes(b.toLowerCase()));
+        const bName = brandMatch || m.split(" ")[0];
+        if (bName && !brands.includes(bName)) brands.push(bName);
+      });
     }
-    return parsed;
+    DEFAULT_DICTIONARIES.brands.forEach(b => {
+      if (!brands.includes(b)) brands.push(b);
+    });
+
+    // Oczyść categoryRodzaje jeśli w pamięci były tam omyłkowo marki
+    let categoryRodzaje = parsed.categoryRodzaje || {};
+    if (!categoryRodzaje["Narciarstwo"] || categoryRodzaje["Narciarstwo"].some(r => knownBrands.includes(r))) {
+      categoryRodzaje = JSON.parse(JSON.stringify(DEFAULT_DICTIONARIES.categoryRodzaje));
+    } else {
+      Object.keys(DEFAULT_DICTIONARIES.categoryRodzaje).forEach(k => {
+        if (!categoryRodzaje[k]) categoryRodzaje[k] = DEFAULT_DICTIONARIES.categoryRodzaje[k];
+      });
+    }
+
+    let rodzajRozmiary = parsed.rodzajRozmiary || {};
+    if (!rodzajRozmiary["Narty"]) {
+      rodzajRozmiary = JSON.parse(JSON.stringify(DEFAULT_DICTIONARIES.rodzajRozmiary));
+    }
+
+    return {
+      categories: (parsed.categories && parsed.categories.length) ? parsed.categories : DEFAULT_DICTIONARIES.categories,
+      brands: brands,
+      categoryRodzaje: categoryRodzaje,
+      rodzajRozmiary: rodzajRozmiary,
+      conditions: (parsed.conditions && parsed.conditions.length) ? parsed.conditions : DEFAULT_DICTIONARIES.conditions
+    };
   } catch (_) {
     return JSON.parse(JSON.stringify(DEFAULT_DICTIONARIES));
   }
@@ -197,6 +239,7 @@ function initTabs() {
 // ================= DYNAMICZNE SŁOWNIKI KASKADOWE (COMBOBOX) =================
 function initComboboxes() {
   const inputCategory = document.getElementById("inputCategory");
+  const inputBrand = document.getElementById("inputBrand");
   const inputRodzaj = document.getElementById("inputRodzaj");
   const inputSize = document.getElementById("inputSize");
 
@@ -220,7 +263,24 @@ function initComboboxes() {
     }
   );
 
-  // 2. Rodzaj sprzętu (dynamicznie zależny od Kategorii)
+  // 2. Marka (ze Słownika)
+  setupCombobox(
+    "inputBrand",
+    "listBrand",
+    () => AppState.dictionaries.brands,
+    (selectedBrand) => {
+      updateLabelPreview();
+    },
+    (newBrand) => {
+      if (!AppState.dictionaries.brands.includes(newBrand)) {
+        AppState.dictionaries.brands.push(newBrand);
+        saveDictionaries();
+        showToast(`Dodano nową markę: "${newBrand}"`);
+      }
+    }
+  );
+
+  // 3. Rodzaj sprzętu (dynamicznie zależny od Kategorii)
   setupCombobox(
     "inputRodzaj",
     "listRodzaj",
@@ -254,7 +314,7 @@ function initComboboxes() {
     }
   );
 
-  // 3. Rozmiar (dynamicznie zależny od Rodzaju)
+  // 4. Rozmiar (dynamicznie zależny od Rodzaju)
   setupCombobox(
     "inputSize",
     "listSize",
@@ -285,7 +345,7 @@ function initComboboxes() {
     }
   );
 
-  // 4. Stan techniczny
+  // 5. Stan techniczny
   setupCombobox(
     "inputCondition",
     "listCondition",
@@ -371,7 +431,7 @@ function setupCombobox(inputId, listId, getItemsFn, onSelectFn, onAddNewFn) {
 
 // ================= PODGLĄD ETYKIETY (50x30 mm) =================
 function initFormPreviewListeners() {
-  const ids = ["inputCategory", "inputRodzaj", "inputSize", "inputCondition", "inputOpis", "inputBuyPrice", "inputSellPrice"];
+  const ids = ["inputCategory", "inputBrand", "inputRodzaj", "inputSize", "inputCondition", "inputOpis", "inputBuyPrice", "inputSellPrice"];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("input", updateLabelPreview);
@@ -398,6 +458,7 @@ async function updateLabelPreview() {
   if (!canvas) return;
 
   const category = (document.getElementById("inputCategory")?.value || "").trim();
+  const brand = (document.getElementById("inputBrand")?.value || "").trim();
   const rodzaj = (document.getElementById("inputRodzaj")?.value || "").trim();
   const size = (document.getElementById("inputSize")?.value || "").trim();
   const condition = (document.getElementById("inputCondition")?.value || "").trim();
@@ -408,10 +469,11 @@ async function updateLabelPreview() {
   const currentData = {
     id: "SP-AUTO",
     category: category || "Narciarstwo",
+    brand: brand || "Salomon",
     rodzaj: rodzaj || "Narty",
     size: size || "165 cm",
     condition: condition || "Po serwisie",
-    opis: opis || "Salomon X-Drive",
+    opis: opis || "X-Drive 8.0",
     buyPrice: buyPrice || "400",
     price: sellPrice || "650",
     sellPrice: sellPrice || "650",
@@ -688,6 +750,7 @@ function renderTemplateToCanvas(canvas, template, itemData, isEditor = false) {
         // Podstawienie zmiennych dynamicznych
         let text = el.text || "";
         text = text.replace(/\{ID\}/gi, itemData.id || "SP-00001");
+        text = text.replace(/\{MARKA\}/gi, itemData.brand || "Salomon");
         text = text.replace(/\{KATEGORIA\}/gi, itemData.category || "Narciarstwo");
         text = text.replace(/\{RODZAJ\}/gi, itemData.rodzaj || "Narty");
         text = text.replace(/\{ROZMIAR\}/gi, itemData.size || "165 cm");
@@ -699,7 +762,7 @@ function renderTemplateToCanvas(canvas, template, itemData, isEditor = false) {
         text = text.replace(/\{DATA_PRZYJECIA\}/gi, itemData.date || itemData.dateIntake || getTodayDate());
 
         // Kompatybilność wsteczna z szablonami zawierającymi {MODEL}
-        const compModel = itemData.model || [itemData.rodzaj, itemData.opis].filter(Boolean).join(" ") || "Sprzęt";
+        const compModel = itemData.model || [itemData.brand, itemData.rodzaj, itemData.opis].filter(Boolean).join(" ") || "Sprzęt";
         text = text.replace(/\{MODEL\}/gi, compModel);
 
         ctx.fillStyle = "#000000";
@@ -774,6 +837,7 @@ async function generateTsplBitmapPayload(itemDataOrId, customTemplate = null, ..
 
     itemData = {
       id: itemDataOrId,
+      brand: document.getElementById("inputBrand") ? document.getElementById("inputBrand").value : "Salomon",
       rodzaj: title || "Sprzęt",
       model: title || "Sprzęt",
       size: size,
@@ -890,6 +954,7 @@ async function sendRawTsplToPrinter(uint8Bytes) {
 // ================= ZAPIS PRZEDMIOTU I WYDRUK =================
 async function handleSaveAndPrint() {
   const category = (document.getElementById("inputCategory")?.value || "").trim();
+  const brand = (document.getElementById("inputBrand")?.value || "").trim();
   const rodzaj = (document.getElementById("inputRodzaj")?.value || "").trim();
   const size = (document.getElementById("inputSize")?.value || "").trim();
   const condition = (document.getElementById("inputCondition")?.value || "").trim();
@@ -897,14 +962,17 @@ async function handleSaveAndPrint() {
   const buyPrice = (document.getElementById("inputBuyPrice")?.value || "").trim();
   const sellPrice = (document.getElementById("inputSellPrice")?.value || "").trim();
 
-  if (!rodzaj || !sellPrice) {
-    alert("Wypełnij wymagane pola: Rodzaj sprzętu oraz Cena sprzedaży!");
+  if (!brand || !rodzaj || !sellPrice) {
+    alert("Wypełnij wymagane pola: Marka, Rodzaj sprzętu oraz Cena sprzedaży!");
     return;
   }
 
   // Zapisz wpisane wartości do lokalnych słowników jeśli są nowe
   if (category && !AppState.dictionaries.categories.includes(category)) {
     AppState.dictionaries.categories.push(category);
+  }
+  if (brand && !AppState.dictionaries.brands.includes(brand)) {
+    AppState.dictionaries.brands.push(brand);
   }
   const currentCat = category || "Inne";
   if (!AppState.dictionaries.categoryRodzaje[currentCat]) {
@@ -942,6 +1010,7 @@ async function handleSaveAndPrint() {
         body: JSON.stringify({
           action: "add_item",
           category: category,
+          brand: brand,
           rodzaj: rodzaj,
           size: size,
           condition: condition,
@@ -961,6 +1030,7 @@ async function handleSaveAndPrint() {
     const itemData = {
       id: newItemId,
       category: category,
+      brand: brand,
       rodzaj: rodzaj,
       size: size,
       condition: condition,
@@ -983,14 +1053,15 @@ async function handleSaveAndPrint() {
       showToast(`Zapisano ${newItemId}! (Drukarka rozłączona - wydruk pominięty)`, 4000);
     }
 
-    // 3. Czyszczenie formularza i przygotowanie do kolejnego
+    // 3. Czyszczenie pól formularza
+    document.getElementById("inputBrand").value = "";
     document.getElementById("inputRodzaj").value = "";
     document.getElementById("inputSize").value = "";
     document.getElementById("inputOpis").value = "";
     document.getElementById("inputBuyPrice").value = "";
     document.getElementById("inputSellPrice").value = "";
     updateLabelPreview();
-    document.getElementById("inputRodzaj").focus();
+    document.getElementById("inputBrand").focus();
 
   } catch (err) {
     console.error(err);
@@ -1076,6 +1147,7 @@ async function handleQrCodeScanned(rawCode) {
     displayItemCard({
       id: cleanId,
       category: "Narciarstwo",
+      brand: "Salomon",
       rodzaj: "Narty",
       size: "165 cm",
       condition: "Po serwisie",
@@ -1108,12 +1180,15 @@ function displayItemCard(item) {
   const card = document.getElementById("itemCard");
   card.classList.remove("hidden");
 
-  const titleText = (item.rodzaj ? item.rodzaj + (item.opis ? " " + item.opis : "") : item.model) || item.id;
+  const brandPrefix = item.brand ? item.brand + " " : "";
+  const titleText = (brandPrefix + (item.rodzaj ? item.rodzaj + (item.opis ? " " + item.opis : "") : item.model)) || item.id;
 
   document.getElementById("cardItemId").textContent = item.id;
   document.getElementById("cardItemDate").textContent = item.date || item.dateIntake || "";
   document.getElementById("cardItemTitle").textContent = titleText;
   document.getElementById("cardItemCategory").textContent = item.category || "-";
+  const cardBrand = document.getElementById("cardItemBrand");
+  if (cardBrand) cardBrand.textContent = item.brand || "-";
   document.getElementById("cardItemRodzaj").textContent = item.rodzaj || "-";
   document.getElementById("cardItemSize").textContent = item.size || "-";
   document.getElementById("cardItemCondition").textContent = item.condition || "-";
@@ -1238,10 +1313,11 @@ function initSettingsModal() {
         const sampleData = {
           id: "SP-00001",
           category: "Narciarstwo",
+          brand: "Salomon",
           rodzaj: "Narty",
           size: "165 cm",
           condition: "Ślizgi po serwisie",
-          opis: "Salomon X-Drive",
+          opis: "X-Drive 8.0 z wiązaniami",
           buyPrice: "400",
           price: "650",
           sellPrice: "650",
@@ -1355,6 +1431,9 @@ function initSettingsModal() {
           categories: (data.dictionaries.categories && data.dictionaries.categories.length)
             ? data.dictionaries.categories
             : AppState.dictionaries.categories,
+          brands: (data.dictionaries.brands && data.dictionaries.brands.length)
+            ? data.dictionaries.brands
+            : AppState.dictionaries.brands,
           categoryRodzaje: (data.dictionaries.categoryRodzaje && Object.keys(data.dictionaries.categoryRodzaje).length)
             ? data.dictionaries.categoryRodzaje
             : AppState.dictionaries.categoryRodzaje,
@@ -1644,10 +1723,11 @@ function initTemplateEditor() {
       const sampleData = {
         id: "SP-SZABLON",
         category: "Narciarstwo",
+        brand: "Salomon",
         rodzaj: "Narty",
         size: "165 cm",
         condition: "Po serwisie",
-        opis: "Salomon X-Drive",
+        opis: "X-Drive 8.0 z wiązaniami",
         buyPrice: "400",
         price: "650",
         sellPrice: "650",
@@ -1701,10 +1781,11 @@ async function renderEditorCanvas() {
   const sampleData = {
     id: "SP-00042",
     category: "Narciarstwo",
+    brand: "Salomon",
     rodzaj: "Narty",
     size: "165 cm",
     condition: "Po serwisie",
-    opis: "Salomon X-Drive",
+    opis: "X-Drive 8.0 z wiązaniami",
     buyPrice: "400",
     price: "650",
     sellPrice: "650",

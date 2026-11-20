@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1e293b">
   <title>Ewidencja Sprzętu Sportowego</title>
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
   <!-- Biblioteka skanera kodów QR z aparatu -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- Lokalny, 100% offline generator kodów QR -->
-  <script src="qrcode.js?v=13"></script>
+  <script src="qrcode.js?v=14"></script>
 </head>
 <body>
   <div class="app-container">
@@ -57,6 +57,15 @@
             <div class="combobox-wrapper">
               <input type="text" id="inputCategory" class="form-input" placeholder="Wybierz lub wpisz nową..." required>
               <div class="dropdown-list" id="listCategory"></div>
+            </div>
+          </div>
+
+          <!-- Marka (ze Słownika) -->
+          <div class="form-group">
+            <label for="inputBrand">Marka *</label>
+            <div class="combobox-wrapper">
+              <input type="text" id="inputBrand" class="form-input" placeholder="np. Salomon, Head, Atomic, Trek..." required>
+              <div class="dropdown-list" id="listBrand"></div>
             </div>
           </div>
 
@@ -170,6 +179,10 @@
               <span class="detail-value" id="cardItemCategory">Narciarstwo</span>
             </div>
             <div class="detail-item">
+              <span class="detail-label">Marka:</span>
+              <span class="detail-value" id="cardItemBrand">Salomon</span>
+            </div>
+            <div class="detail-item">
               <span class="detail-label">Rodzaj:</span>
               <span class="detail-value" id="cardItemRodzaj">Narty</span>
             </div>
@@ -265,6 +278,7 @@
                 <input type="text" id="propTextContent" class="form-input" placeholder="np. CENA: {CENA} PLN">
                 <div class="tag-pills">
                   <span class="tag-pill" data-tag="{ID}">+{ID}</span>
+                  <span class="tag-pill" data-tag="{MARKA}">+{MARKA}</span>
                   <span class="tag-pill" data-tag="{KATEGORIA}">+{KATEGORIA}</span>
                   <span class="tag-pill" data-tag="{RODZAJ}">+{RODZAJ}</span>
                   <span class="tag-pill" data-tag="{ROZMIAR}">+{ROZMIAR}</span>
@@ -409,6 +423,6 @@
 
   </div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
