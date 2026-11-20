@@ -729,6 +729,10 @@ label {
   margin-bottom: 16px;
 }
 
+.card-details-grid .full-width {
+  grid-column: span 2;
+}
+
 .detail-label {
   display: block;
   font-size: 0.75rem;

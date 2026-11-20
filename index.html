@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1e293b">
   <title>Ewidencja Sprzętu Sportowego</title>
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=13">
   <!-- Biblioteka skanera kodów QR z aparatu -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- Lokalny, 100% offline generator kodów QR -->
-  <script src="qrcode.js?v=12"></script>
+  <script src="qrcode.js?v=13"></script>
 </head>
 <body>
   <div class="app-container">
@@ -53,38 +53,44 @@
           
           <!-- Kategoria -->
           <div class="form-group">
-            <label for="inputCategory">Kategoria</label>
+            <label for="inputCategory">Kategoria *</label>
             <div class="combobox-wrapper">
               <input type="text" id="inputCategory" class="form-input" placeholder="Wybierz lub wpisz nową..." required>
               <div class="dropdown-list" id="listCategory"></div>
             </div>
           </div>
 
-          <!-- Marka i Model -->
+          <!-- Rodzaj sprzętu (dynamiczny wg Kategorii) -->
           <div class="form-group">
-            <label for="inputModel">Marka i Model sprzętu</label>
+            <label for="inputRodzaj">Rodzaj sprzętu *</label>
             <div class="combobox-wrapper">
-              <input type="text" id="inputModel" class="form-input" placeholder="np. Salomon X-Drive, Kross Hexagon..." required>
-              <div class="dropdown-list" id="listModel"></div>
+              <input type="text" id="inputRodzaj" class="form-input" placeholder="np. Narty, Buty, Deska, Rower..." required>
+              <div class="dropdown-list" id="listRodzaj"></div>
             </div>
           </div>
 
-          <!-- Rozmiar / Wariant -->
+          <!-- Rozmiar (dynamiczny wg Rodzaju) -->
           <div class="form-group">
-            <label for="inputSize">Rozmiar / Wariant</label>
+            <label for="inputSize">Rozmiar / Wariant *</label>
             <div class="combobox-wrapper">
-              <input type="text" id="inputSize" class="form-input" placeholder="np. 165 cm, Rama L, Skorupa 305mm...">
+              <input type="text" id="inputSize" class="form-input" placeholder="np. 165 cm, Rama M, Rozm. 42...">
               <div class="dropdown-list" id="listSize"></div>
             </div>
           </div>
 
-          <!-- Stan / Uwagi -->
+          <!-- Stan techniczny -->
           <div class="form-group">
-            <label for="inputCondition">Stan techniczny / Uwagi</label>
+            <label for="inputCondition">Stan techniczny *</label>
             <div class="combobox-wrapper">
-              <input type="text" id="inputCondition" class="form-input" placeholder="np. Po serwisie, Nowy, Drobne otarcia...">
+              <input type="text" id="inputCondition" class="form-input" placeholder="Wybierz lub wpisz stan...">
               <div class="dropdown-list" id="listCondition"></div>
             </div>
+          </div>
+
+          <!-- Opis sprzętu / Notatka -->
+          <div class="form-group">
+            <label for="inputOpis">Opis sprzętu / Notatka</label>
+            <input type="text" id="inputOpis" class="form-input" placeholder="np. Salomon X-Drive 8.0 z wiązaniami, stan super">
           </div>
 
           <!-- Ceny w dwóch kolumnach -->
@@ -164,16 +170,32 @@
               <span class="detail-value" id="cardItemCategory">Narciarstwo</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Wariant:</span>
+              <span class="detail-label">Rodzaj:</span>
+              <span class="detail-value" id="cardItemRodzaj">Narty</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Rozmiar:</span>
               <span class="detail-value" id="cardItemSize">165 cm</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Stan:</span>
               <span class="detail-value" id="cardItemCondition">Po serwisie</span>
             </div>
+            <div class="detail-item full-width" id="boxItemOpis">
+              <span class="detail-label">Opis / Notatka:</span>
+              <span class="detail-value" id="cardItemOpis">-</span>
+            </div>
             <div class="detail-item">
-              <span class="detail-label">Cena:</span>
+              <span class="detail-label">Cena zakupu:</span>
+              <span class="detail-value" id="cardItemBuyPrice">400 PLN</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Cena sprzedaży:</span>
               <span class="detail-value price" id="cardItemPrice">650 PLN</span>
+            </div>
+            <div class="detail-item full-width hidden" id="boxItemSoldDate">
+              <span class="detail-label">Data sprzedaży:</span>
+              <span class="detail-value" id="cardItemSoldDate">-</span>
             </div>
           </div>
 
@@ -243,10 +265,15 @@
                 <input type="text" id="propTextContent" class="form-input" placeholder="np. CENA: {CENA} PLN">
                 <div class="tag-pills">
                   <span class="tag-pill" data-tag="{ID}">+{ID}</span>
-                  <span class="tag-pill" data-tag="{MODEL}">+{MODEL}</span>
-                  <span class="tag-pill" data-tag="{CENA}">+{CENA}</span>
+                  <span class="tag-pill" data-tag="{KATEGORIA}">+{KATEGORIA}</span>
+                  <span class="tag-pill" data-tag="{RODZAJ}">+{RODZAJ}</span>
                   <span class="tag-pill" data-tag="{ROZMIAR}">+{ROZMIAR}</span>
                   <span class="tag-pill" data-tag="{STAN}">+{STAN}</span>
+                  <span class="tag-pill" data-tag="{OPIS}">+{OPIS}</span>
+                  <span class="tag-pill" data-tag="{CENA}">+{CENA}</span>
+                  <span class="tag-pill" data-tag="{CENA_ZAKUPU}">+{CENA_ZAKUPU}</span>
+                  <span class="tag-pill" data-tag="{STATUS}">+{STATUS}</span>
+                  <span class="tag-pill" data-tag="{DATA_PRZYJECIA}">+{DATA_PRZYJECIA}</span>
                 </div>
               </div>
 
@@ -382,6 +409,6 @@
 
   </div>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

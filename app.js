@@ -20,7 +20,7 @@ const DEFAULT_TEMPLATES = [
     qrSize: 135,
     elements: [
       { id: "el_id", type: "text", text: "ID: {ID}", x: 15, y: 36, fontSize: 22, bold: true },
-      { id: "el_model", type: "text", text: "{MODEL}", x: 160, y: 75, fontSize: 22, bold: true },
+      { id: "el_rodzaj", type: "text", text: "{RODZAJ} {OPIS}", x: 160, y: 75, fontSize: 22, bold: true },
       { id: "el_sub", type: "text", text: "{ROZMIAR} / {STAN}", x: 160, y: 115, fontSize: 18, bold: false },
       { id: "el_price", type: "text", text: "CENA: {CENA} PLN", x: 160, y: 175, fontSize: 26, bold: true }
     ]
@@ -35,7 +35,7 @@ const DEFAULT_TEMPLATES = [
     qrSize: 170,
     elements: [
       { id: "el_promo", type: "text", text: "★ SUPER OKAZJA ★", x: 195, y: 40, fontSize: 20, bold: true },
-      { id: "el_model", type: "text", text: "{MODEL}", x: 195, y: 75, fontSize: 20, bold: false },
+      { id: "el_rodzaj", type: "text", text: "{RODZAJ} {OPIS}", x: 195, y: 75, fontSize: 20, bold: false },
       { id: "el_id", type: "text", text: "ID: {ID}", x: 195, y: 110, fontSize: 16, bold: false },
       { id: "el_price", type: "text", text: "{CENA} PLN", x: 195, y: 170, fontSize: 34, bold: true }
     ]
@@ -50,13 +50,80 @@ const DEFAULT_TEMPLATES = [
     qrSize: 140,
     elements: [
       { id: "el_brand", type: "text", text: "SPORT-SERVICE", x: 15, y: 35, fontSize: 22, bold: true },
-      { id: "el_model", type: "text", text: "{MODEL}", x: 15, y: 75, fontSize: 20, bold: true },
+      { id: "el_rodzaj", type: "text", text: "{RODZAJ} {OPIS}", x: 15, y: 75, fontSize: 20, bold: true },
       { id: "el_sub", type: "text", text: "{STAN} ({ROZMIAR})", x: 15, y: 110, fontSize: 17, bold: false },
       { id: "el_price", type: "text", text: "{CENA} PLN", x: 15, y: 160, fontSize: 26, bold: true },
       { id: "el_id", type: "text", text: "ID: {ID}", x: 15, y: 200, fontSize: 16, bold: false }
     ]
   }
 ];
+
+// ================= DOMYŚLNE SŁOWNIKI KASKADOWE =================
+const DEFAULT_DICTIONARIES = {
+  categories: ["Narciarstwo", "Snowboard", "Kolarstwo", "Rolki / Łyżwy", "Turystyka", "Inne"],
+  categoryRodzaje: {
+    "Narciarstwo": ["Narty", "Buty", "Kijki", "Kask", "Gogle"],
+    "Snowboard": ["Deska", "Buty SB", "Wiązania", "Kask", "Gogle"],
+    "Kolarstwo": ["Rower Górski (MTB)", "Rower Szosowy", "Rower Gravel", "Rower Miejski", "Kask rowerowy", "Akcesoria"],
+    "Rolki / Łyżwy": ["Rolki", "Łyżwy figurowe", "Łyżwy hokejowe", "Ochraniacze"],
+    "Turystyka": ["Plecak", "Kije trekkingowe", "Namiot", "Śpiwór", "Buty trekkingowe"],
+    "Inne": ["Sprzęt ogólny", "Akcesoria"]
+  },
+  rodzajRozmiary: {
+    "Narty": ["140 cm", "145 cm", "150 cm", "155 cm", "160 cm", "165 cm", "170 cm", "175 cm", "180 cm"],
+    "Buty": ["24.0 (EU 37)", "24.5 (EU 38)", "25.0 (EU 39)", "25.5 (EU 40)", "26.0 (EU 40.5)", "26.5 (EU 41)", "27.0 (EU 42)", "27.5 (EU 42.5)", "28.0 (EU 43)", "28.5 (EU 44)", "29.0 (EU 44.5)", "29.5 (EU 45)"],
+    "Kijki": ["110 cm", "115 cm", "120 cm", "125 cm", "130 cm", "135 cm"],
+    "Kask": ["XS (51-53 cm)", "S (53-55 cm)", "M (56-58 cm)", "L (59-61 cm)", "XL (61-63 cm)"],
+    "Gogle": ["S (Dziecięce)", "M/L (Uniwersalne)", "OTG (Na okulary)"],
+    "Deska": ["145 cm", "150 cm", "153 cm", "156 cm", "159 cm", "162 cm"],
+    "Buty SB": ["25.0 (EU 39)", "26.0 (EU 40.5)", "27.0 (EU 42)", "28.0 (EU 43)", "29.0 (EU 44.5)"],
+    "Wiązania": ["S", "M", "L"],
+    "Rower Górski (MTB)": ["Rama XS (14\")", "Rama S (16\")", "Rama M (18\")", "Rama L (20\")", "Rama XL (22\")"],
+    "Rower Szosowy": ["50 cm (S)", "52 cm (M)", "54 cm (M/L)", "56 cm (L)", "58 cm (XL)"],
+    "Rower Gravel": ["S", "M", "L", "XL"],
+    "Rower Miejski": ["Rama M", "Rama L"],
+    "Kask rowerowy": ["S (52-56 cm)", "M (55-59 cm)", "L (58-62 cm)"],
+    "Rolki": ["EU 36", "EU 37", "EU 38", "EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "EU 45"],
+    "Łyżwy figurowe": ["EU 36", "EU 37", "EU 38", "EU 39", "EU 40", "EU 41"],
+    "Łyżwy hokejowe": ["EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "EU 45"]
+  },
+  conditions: ["Nowy", "Używany", "Bardzo dobry", "Po serwisie", "Do serwisu"]
+};
+
+function loadStoredDictionaries() {
+  const stored = localStorage.getItem("sport_dictionaries");
+  if (!stored) return JSON.parse(JSON.stringify(DEFAULT_DICTIONARIES));
+  try {
+    const parsed = JSON.parse(stored);
+    if (!parsed.categoryRodzaje || !parsed.rodzajRozmiary) {
+      return {
+        categories: (parsed.categories && parsed.categories.length) ? parsed.categories : DEFAULT_DICTIONARIES.categories,
+        categoryRodzaje: { ...DEFAULT_DICTIONARIES.categoryRodzaje, ...(parsed.categoryRodzaje || {}) },
+        rodzajRozmiary: { ...DEFAULT_DICTIONARIES.rodzajRozmiary, ...(parsed.rodzajRozmiary || {}) },
+        conditions: (parsed.conditions && parsed.conditions.length) ? parsed.conditions : DEFAULT_DICTIONARIES.conditions
+      };
+    }
+    return parsed;
+  } catch (_) {
+    return JSON.parse(JSON.stringify(DEFAULT_DICTIONARIES));
+  }
+}
+
+function saveDictionaries() {
+  try {
+    localStorage.setItem("sport_dictionaries", JSON.stringify(AppState.dictionaries));
+  } catch (e) {
+    console.error("Błąd zapisu słowników:", e);
+  }
+}
+
+function getTodayDate() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 // ================= STAN APLIKACJI =================
 const AppState = {
@@ -79,13 +146,8 @@ const AppState = {
   initialElementX: 0,
   initialElementY: 0,
 
-  // Domyślne słowniki (rozszerzane dynamicznie)
-  dictionaries: JSON.parse(localStorage.getItem("sport_dictionaries")) || {
-    categories: ["Narciarstwo", "Snowboard", "Kolarstwo", "Fitness", "Rolki / Łyżwy", "Turystyka"],
-    models: ["Salomon X-Drive", "Atomic Redster", "Head Supershape", "Rossignol Hero", "Trek Marlin", "Kross Hexagon", "Giant Talon"],
-    sizes: ["150 cm", "155 cm", "160 cm", "165 cm", "170 cm", "175 cm", "Rama S", "Rama M", "Rama L", "Rozm. 42", "Rozm. 43"],
-    conditions: ["Bardzo dobry", "Po serwisie", "Nowy / Jak nowy", "Widoczne ślady użytkowania", "Drobne otarcia", "Do serwisu"]
-  }
+  // Domyślne słowniki kaskadowe (rozszerzane dynamicznie)
+  dictionaries: loadStoredDictionaries()
 };
 
 // ================= INICJALIZACJA PO ZAŁADOWANIU =================
@@ -132,25 +194,131 @@ function initTabs() {
   });
 }
 
-// ================= DYNAMICZNE SŁOWNIKI (COMBOBOX) =================
+// ================= DYNAMICZNE SŁOWNIKI KASKADOWE (COMBOBOX) =================
 function initComboboxes() {
-  setupCombobox("inputCategory", "listCategory", AppState.dictionaries.categories, "categories");
-  setupCombobox("inputModel", "listModel", AppState.dictionaries.models, "models");
-  setupCombobox("inputSize", "listSize", AppState.dictionaries.sizes, "sizes");
-  setupCombobox("inputCondition", "listCondition", AppState.dictionaries.conditions, "conditions");
+  const inputCategory = document.getElementById("inputCategory");
+  const inputRodzaj = document.getElementById("inputRodzaj");
+  const inputSize = document.getElementById("inputSize");
+
+  // 1. Kategoria
+  setupCombobox(
+    "inputCategory",
+    "listCategory",
+    () => AppState.dictionaries.categories,
+    (selectedCat) => {
+      updateLabelPreview();
+    },
+    (newCat) => {
+      if (!AppState.dictionaries.categories.includes(newCat)) {
+        AppState.dictionaries.categories.push(newCat);
+        if (!AppState.dictionaries.categoryRodzaje[newCat]) {
+          AppState.dictionaries.categoryRodzaje[newCat] = [];
+        }
+        saveDictionaries();
+        showToast(`Dodano nową kategorię: "${newCat}"`);
+      }
+    }
+  );
+
+  // 2. Rodzaj sprzętu (dynamicznie zależny od Kategorii)
+  setupCombobox(
+    "inputRodzaj",
+    "listRodzaj",
+    () => {
+      const cat = inputCategory ? inputCategory.value.trim() : "";
+      if (cat && AppState.dictionaries.categoryRodzaje[cat] && AppState.dictionaries.categoryRodzaje[cat].length) {
+        return AppState.dictionaries.categoryRodzaje[cat];
+      }
+      const all = [];
+      Object.values(AppState.dictionaries.categoryRodzaje).forEach(arr => {
+        arr.forEach(r => { if (!all.includes(r)) all.push(r); });
+      });
+      return all;
+    },
+    (selectedRodzaj) => {
+      updateLabelPreview();
+    },
+    (newRodzaj) => {
+      const cat = (inputCategory && inputCategory.value.trim()) || "Inne";
+      if (!AppState.dictionaries.categoryRodzaje[cat]) {
+        AppState.dictionaries.categoryRodzaje[cat] = [];
+      }
+      if (!AppState.dictionaries.categoryRodzaje[cat].includes(newRodzaj)) {
+        AppState.dictionaries.categoryRodzaje[cat].push(newRodzaj);
+      }
+      if (!AppState.dictionaries.rodzajRozmiary[newRodzaj]) {
+        AppState.dictionaries.rodzajRozmiary[newRodzaj] = [];
+      }
+      saveDictionaries();
+      showToast(`Dodano rodzaj: "${newRodzaj}" do kategorii "${cat}"`);
+    }
+  );
+
+  // 3. Rozmiar (dynamicznie zależny od Rodzaju)
+  setupCombobox(
+    "inputSize",
+    "listSize",
+    () => {
+      const rod = inputRodzaj ? inputRodzaj.value.trim() : "";
+      if (rod && AppState.dictionaries.rodzajRozmiary[rod] && AppState.dictionaries.rodzajRozmiary[rod].length) {
+        return AppState.dictionaries.rodzajRozmiary[rod];
+      }
+      const all = [];
+      Object.values(AppState.dictionaries.rodzajRozmiary).forEach(arr => {
+        arr.forEach(s => { if (!all.includes(s)) all.push(s); });
+      });
+      return all.length ? all : ["150 cm", "160 cm", "170 cm", "S", "M", "L", "XL"];
+    },
+    (selectedSize) => {
+      updateLabelPreview();
+    },
+    (newSize) => {
+      const rod = (inputRodzaj && inputRodzaj.value.trim()) || "Inne";
+      if (!AppState.dictionaries.rodzajRozmiary[rod]) {
+        AppState.dictionaries.rodzajRozmiary[rod] = [];
+      }
+      if (!AppState.dictionaries.rodzajRozmiary[rod].includes(newSize)) {
+        AppState.dictionaries.rodzajRozmiary[rod].push(newSize);
+      }
+      saveDictionaries();
+      showToast(`Dodano rozmiar: "${newSize}" dla "${rod}"`);
+    }
+  );
+
+  // 4. Stan techniczny
+  setupCombobox(
+    "inputCondition",
+    "listCondition",
+    () => AppState.dictionaries.conditions,
+    (selectedCond) => {
+      updateLabelPreview();
+    },
+    (newCond) => {
+      if (!AppState.dictionaries.conditions.includes(newCond)) {
+        AppState.dictionaries.conditions.push(newCond);
+        saveDictionaries();
+        showToast(`Dodano stan: "${newCond}"`);
+      }
+    }
+  );
 }
 
-function setupCombobox(inputId, listId, itemsArray, dictKey) {
+function setupCombobox(inputId, listId, getItemsFn, onSelectFn, onAddNewFn) {
   const input = document.getElementById(inputId);
   const list = document.getElementById(listId);
   if (!input || !list) return;
 
+  function getItems() {
+    return typeof getItemsFn === "function" ? getItemsFn() : (getItemsFn || []);
+  }
+
   function renderList(query = "") {
     list.innerHTML = "";
     const cleanQuery = query.trim().toLowerCase();
+    const items = getItems();
     
     // Filtrowanie istniejących
-    const matches = itemsArray.filter(item => item.toLowerCase().includes(cleanQuery));
+    const matches = items.filter(item => item.toLowerCase().includes(cleanQuery));
 
     matches.forEach(item => {
       const div = document.createElement("div");
@@ -159,20 +327,22 @@ function setupCombobox(inputId, listId, itemsArray, dictKey) {
       div.addEventListener("click", () => {
         input.value = item;
         list.classList.remove("show");
+        if (onSelectFn) onSelectFn(item);
         updateLabelPreview();
       });
       list.appendChild(div);
     });
 
     // Opcja dodania nowego, jeśli nie istnieje dokładnie
-    if (query.trim() && !itemsArray.some(it => it.toLowerCase() === cleanQuery)) {
+    if (query.trim() && !items.some(it => it.toLowerCase() === cleanQuery)) {
       const addDiv = document.createElement("div");
       addDiv.className = "dropdown-item add-new";
       addDiv.textContent = `➕ Dodaj nową: "${query.trim()}"`;
       addDiv.addEventListener("click", () => {
-        saveNewOption(dictKey, query.trim(), itemsArray);
-        input.value = query.trim();
+        const val = query.trim();
+        input.value = val;
         list.classList.remove("show");
+        if (onAddNewFn) onAddNewFn(val);
         updateLabelPreview();
       });
       list.appendChild(addDiv);
@@ -199,19 +369,9 @@ function setupCombobox(inputId, listId, itemsArray, dictKey) {
   });
 }
 
-function saveNewOption(dictKey, val, itemsArray) {
-  if (!val) return;
-  const trimmed = val.trim();
-  if (!itemsArray.some(x => x.toLowerCase() === trimmed.toLowerCase())) {
-    itemsArray.push(trimmed);
-    localStorage.setItem("sport_dictionaries", JSON.stringify(AppState.dictionaries));
-    showToast(`Dodano "${trimmed}" do podpowiedzi!`);
-  }
-}
-
 // ================= PODGLĄD ETYKIETY (50x30 mm) =================
 function initFormPreviewListeners() {
-  const ids = ["inputCategory", "inputModel", "inputSize", "inputCondition", "inputSellPrice"];
+  const ids = ["inputCategory", "inputRodzaj", "inputSize", "inputCondition", "inputOpis", "inputBuyPrice", "inputSellPrice"];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("input", updateLabelPreview);
@@ -237,13 +397,26 @@ async function updateLabelPreview() {
   const canvas = document.getElementById("intakePreviewCanvas");
   if (!canvas) return;
 
+  const category = (document.getElementById("inputCategory")?.value || "").trim();
+  const rodzaj = (document.getElementById("inputRodzaj")?.value || "").trim();
+  const size = (document.getElementById("inputSize")?.value || "").trim();
+  const condition = (document.getElementById("inputCondition")?.value || "").trim();
+  const opis = (document.getElementById("inputOpis")?.value || "").trim();
+  const buyPrice = (document.getElementById("inputBuyPrice")?.value || "").trim();
+  const sellPrice = (document.getElementById("inputSellPrice")?.value || "").trim();
+
   const currentData = {
     id: "SP-AUTO",
-    model: document.getElementById("inputModel").value.trim() || "Nazwa sprzętu",
-    size: document.getElementById("inputSize").value.trim() || "165 cm",
-    condition: document.getElementById("inputCondition").value.trim() || "Po serwisie",
-    price: document.getElementById("inputSellPrice").value.trim() || "0",
-    category: document.getElementById("inputCategory").value.trim() || "Narciarstwo"
+    category: category || "Narciarstwo",
+    rodzaj: rodzaj || "Narty",
+    size: size || "165 cm",
+    condition: condition || "Po serwisie",
+    opis: opis || "Salomon X-Drive",
+    buyPrice: buyPrice || "400",
+    price: sellPrice || "650",
+    sellPrice: sellPrice || "650",
+    status: "Dostępny",
+    date: getTodayDate()
   };
 
   const activeTpl = getActiveTemplate();
@@ -515,11 +688,19 @@ function renderTemplateToCanvas(canvas, template, itemData, isEditor = false) {
         // Podstawienie zmiennych dynamicznych
         let text = el.text || "";
         text = text.replace(/\{ID\}/gi, itemData.id || "SP-00001");
-        text = text.replace(/\{MODEL\}/gi, itemData.model || "Nazwa sprzętu");
+        text = text.replace(/\{KATEGORIA\}/gi, itemData.category || "Narciarstwo");
+        text = text.replace(/\{RODZAJ\}/gi, itemData.rodzaj || "Narty");
         text = text.replace(/\{ROZMIAR\}/gi, itemData.size || "165 cm");
         text = text.replace(/\{STAN\}/gi, itemData.condition || "Po serwisie");
-        text = text.replace(/\{CENA\}/gi, itemData.price || "0");
-        text = text.replace(/\{KATEGORIA\}/gi, itemData.category || "Sprzęt");
+        text = text.replace(/\{OPIS\}/gi, itemData.opis || "");
+        text = text.replace(/\{CENA_ZAKUPU\}/gi, itemData.buyPrice || "0");
+        text = text.replace(/\{CENA\}/gi, itemData.price || itemData.sellPrice || "0");
+        text = text.replace(/\{STATUS\}/gi, itemData.status || "Dostępny");
+        text = text.replace(/\{DATA_PRZYJECIA\}/gi, itemData.date || itemData.dateIntake || getTodayDate());
+
+        // Kompatybilność wsteczna z szablonami zawierającymi {MODEL}
+        const compModel = itemData.model || [itemData.rodzaj, itemData.opis].filter(Boolean).join(" ") || "Sprzęt";
+        text = text.replace(/\{MODEL\}/gi, compModel);
 
         ctx.fillStyle = "#000000";
         ctx.textAlign = "left";
@@ -568,7 +749,7 @@ function drawSelectionBox(ctx, x, y, w, h) {
  * Renderuje etykietę 50x30 mm na ukrytym Canvasie HTML5 w oparciu o AKTYWNY SZABLON,
  * konwertuje na 1-bitową monochromatyczną bitmapę i generuje komendę TSPL BITMAP.
  */
-async function generateTsplBitmapPayload(itemId, title, size, condition, price, customTemplate = null) {
+async function generateTsplBitmapPayload(itemDataOrId, customTemplate = null, ...legacyArgs) {
   const WIDTH_DOTS = 384; // 48 mm przy 203 DPI (podzielne przez 8: 48 bajtów)
   const HEIGHT_DOTS = 240; // 30 mm przy 203 DPI
   const WIDTH_BYTES = WIDTH_DOTS / 8; // 48 bajtów na wiersz
@@ -577,16 +758,36 @@ async function generateTsplBitmapPayload(itemId, title, size, condition, price, 
   canvas.width = WIDTH_DOTS;
   canvas.height = HEIGHT_DOTS;
 
-  const itemData = {
-    id: itemId,
-    model: title,
-    size: size,
-    condition: condition,
-    price: price,
-    category: document.getElementById("inputCategory") ? document.getElementById("inputCategory").value : "Sprzęt"
-  };
+  let itemData = {};
+  let templateToUse = customTemplate;
 
-  const templateToUse = customTemplate || getActiveTemplate();
+  if (typeof itemDataOrId === "object" && itemDataOrId !== null) {
+    itemData = { ...itemDataOrId };
+    if (!templateToUse) templateToUse = getActiveTemplate();
+  } else {
+    // Kompatybilność z parametrami pozycyjnymi: (itemId, title, size, condition, price, customTemplate)
+    const title = customTemplate;
+    const size = legacyArgs[0] || "";
+    const condition = legacyArgs[1] || "";
+    const price = legacyArgs[2] || "0";
+    templateToUse = legacyArgs[3] || getActiveTemplate();
+
+    itemData = {
+      id: itemDataOrId,
+      rodzaj: title || "Sprzęt",
+      model: title || "Sprzęt",
+      size: size,
+      condition: condition,
+      price: price,
+      sellPrice: price,
+      category: document.getElementById("inputCategory") ? document.getElementById("inputCategory").value : "Sprzęt",
+      opis: document.getElementById("inputOpis") ? document.getElementById("inputOpis").value : "",
+      buyPrice: document.getElementById("inputBuyPrice") ? document.getElementById("inputBuyPrice").value : "",
+      status: "Dostępny",
+      date: getTodayDate()
+    };
+  }
+
   await preloadTemplateImages(templateToUse);
   renderTemplateToCanvas(canvas, templateToUse, itemData, false);
 
@@ -614,7 +815,7 @@ async function generateTsplBitmapPayload(itemId, title, size, condition, price, 
     }
   }
 
-  // 6. Budowa pełnego pakietu TSPL z nagłówkiem BITMAP i stopką PRINT 1
+  // Budowa pełnego pakietu TSPL z nagłówkiem BITMAP i stopką PRINT 1
   const headerStr = `SIZE 48 mm,30 mm\r\nGAP 2 mm,0 mm\r\nDENSITY 15\r\nSPEED 2\r\nDIRECTION 0\r\nCLS\r\nBITMAP 0,0,${WIDTH_BYTES},${HEIGHT_DOTS},0,`;
   const footerStr = `\r\nPRINT 1\r\n`;
 
@@ -688,23 +889,40 @@ async function sendRawTsplToPrinter(uint8Bytes) {
 
 // ================= ZAPIS PRZEDMIOTU I WYDRUK =================
 async function handleSaveAndPrint() {
-  const category = document.getElementById("inputCategory").value.trim();
-  const model = document.getElementById("inputModel").value.trim();
-  const size = document.getElementById("inputSize").value.trim();
-  const condition = document.getElementById("inputCondition").value.trim();
-  const buyPrice = document.getElementById("inputBuyPrice").value.trim();
-  const sellPrice = document.getElementById("inputSellPrice").value.trim();
+  const category = (document.getElementById("inputCategory")?.value || "").trim();
+  const rodzaj = (document.getElementById("inputRodzaj")?.value || "").trim();
+  const size = (document.getElementById("inputSize")?.value || "").trim();
+  const condition = (document.getElementById("inputCondition")?.value || "").trim();
+  const opis = (document.getElementById("inputOpis")?.value || "").trim();
+  const buyPrice = (document.getElementById("inputBuyPrice")?.value || "").trim();
+  const sellPrice = (document.getElementById("inputSellPrice")?.value || "").trim();
 
-  if (!model || !sellPrice) {
-    alert("Wypełnij wymagane pola: Marka/Model oraz Cena sprzedaży!");
+  if (!rodzaj || !sellPrice) {
+    alert("Wypełnij wymagane pola: Rodzaj sprzętu oraz Cena sprzedaży!");
     return;
   }
 
-  // Zapisz wpisane wartości do słowników jeśli są nowe
-  saveNewOption("categories", category, AppState.dictionaries.categories);
-  saveNewOption("models", model, AppState.dictionaries.models);
-  saveNewOption("sizes", size, AppState.dictionaries.sizes);
-  saveNewOption("conditions", condition, AppState.dictionaries.conditions);
+  // Zapisz wpisane wartości do lokalnych słowników jeśli są nowe
+  if (category && !AppState.dictionaries.categories.includes(category)) {
+    AppState.dictionaries.categories.push(category);
+  }
+  const currentCat = category || "Inne";
+  if (!AppState.dictionaries.categoryRodzaje[currentCat]) {
+    AppState.dictionaries.categoryRodzaje[currentCat] = [];
+  }
+  if (rodzaj && !AppState.dictionaries.categoryRodzaje[currentCat].includes(rodzaj)) {
+    AppState.dictionaries.categoryRodzaje[currentCat].push(rodzaj);
+  }
+  if (!AppState.dictionaries.rodzajRozmiary[rodzaj]) {
+    AppState.dictionaries.rodzajRozmiary[rodzaj] = [];
+  }
+  if (size && !AppState.dictionaries.rodzajRozmiary[rodzaj].includes(size)) {
+    AppState.dictionaries.rodzajRozmiary[rodzaj].push(size);
+  }
+  if (condition && !AppState.dictionaries.conditions.includes(condition)) {
+    AppState.dictionaries.conditions.push(condition);
+  }
+  saveDictionaries();
 
   const btn = document.getElementById("btnSaveAndPrint");
   btn.disabled = true;
@@ -713,8 +931,9 @@ async function handleSaveAndPrint() {
 
   try {
     let newItemId = "SP-" + Math.floor(10000 + Math.random() * 90000); // Awaryjny ID offline
+    const todayDate = getTodayDate();
 
-    // 1. Wysyłka do Google Sheets jeśli podano URL
+    // 1. Wysyłka do Google Sheets jeśli podano URL (arkusz Magazyn + auto dodanie do Slowniki)
     if (AppState.scriptUrl) {
       showToast("Wysyłanie do Google Sheets...");
       const response = await fetch(AppState.scriptUrl, {
@@ -723,11 +942,13 @@ async function handleSaveAndPrint() {
         body: JSON.stringify({
           action: "add_item",
           category: category,
-          model: model,
+          rodzaj: rodzaj,
           size: size,
           condition: condition,
+          opis: opis,
           buyPrice: buyPrice,
-          sellPrice: sellPrice
+          sellPrice: sellPrice,
+          date: todayDate
         })
       });
 
@@ -737,13 +958,24 @@ async function handleSaveAndPrint() {
       }
     }
 
-    const prevIdEl = document.getElementById("prevId");
-    if (prevIdEl) prevIdEl.textContent = "ID: " + newItemId;
+    const itemData = {
+      id: newItemId,
+      category: category,
+      rodzaj: rodzaj,
+      size: size,
+      condition: condition,
+      opis: opis,
+      buyPrice: buyPrice,
+      price: sellPrice,
+      sellPrice: sellPrice,
+      status: "Dostępny",
+      date: todayDate
+    };
 
     // 2. Drukowanie przez Bluetooth w trybie graficznym (BITMAP)
     if (AppState.isPrinterConnected) {
       showToast(`Generowanie etykiety dla ${newItemId}...`);
-      const tsplBytes = await generateTsplBitmapPayload(newItemId, model, size, condition, sellPrice);
+      const tsplBytes = await generateTsplBitmapPayload(itemData);
       showToast(`Drukowanie etykiety dla ${newItemId}...`);
       await sendRawTsplToPrinter(tsplBytes);
       showToast(`Wydrukowano etykietę: ${newItemId}! 🎉`, 3000);
@@ -752,12 +984,13 @@ async function handleSaveAndPrint() {
     }
 
     // 3. Czyszczenie formularza i przygotowanie do kolejnego
-    document.getElementById("inputModel").value = "";
+    document.getElementById("inputRodzaj").value = "";
     document.getElementById("inputSize").value = "";
-    document.getElementById("inputSellPrice").value = "";
+    document.getElementById("inputOpis").value = "";
     document.getElementById("inputBuyPrice").value = "";
+    document.getElementById("inputSellPrice").value = "";
     updateLabelPreview();
-    document.getElementById("inputModel").focus();
+    document.getElementById("inputRodzaj").focus();
 
   } catch (err) {
     console.error(err);
@@ -842,13 +1075,15 @@ async function handleQrCodeScanned(rawCode) {
   if (!AppState.scriptUrl) {
     displayItemCard({
       id: cleanId,
-      model: "Przykładowy sprzęt (Brak URL Google Sheets)",
       category: "Narciarstwo",
+      rodzaj: "Narty",
       size: "165 cm",
       condition: "Po serwisie",
+      opis: "Przykładowy opis (Brak URL Google Sheets)",
+      buyPrice: "300",
       sellPrice: "500",
       status: "Dostępny",
-      date: new Date().toISOString().slice(0, 10)
+      date: getTodayDate()
     });
     return;
   }
@@ -873,18 +1108,38 @@ function displayItemCard(item) {
   const card = document.getElementById("itemCard");
   card.classList.remove("hidden");
 
+  const titleText = (item.rodzaj ? item.rodzaj + (item.opis ? " " + item.opis : "") : item.model) || item.id;
+
   document.getElementById("cardItemId").textContent = item.id;
-  document.getElementById("cardItemDate").textContent = item.date || "";
-  document.getElementById("cardItemTitle").textContent = item.model;
+  document.getElementById("cardItemDate").textContent = item.date || item.dateIntake || "";
+  document.getElementById("cardItemTitle").textContent = titleText;
   document.getElementById("cardItemCategory").textContent = item.category || "-";
+  document.getElementById("cardItemRodzaj").textContent = item.rodzaj || "-";
   document.getElementById("cardItemSize").textContent = item.size || "-";
   document.getElementById("cardItemCondition").textContent = item.condition || "-";
-  document.getElementById("cardItemPrice").textContent = `${item.sellPrice} PLN`;
+
+  const cardOpis = document.getElementById("cardItemOpis");
+  if (cardOpis) cardOpis.textContent = item.opis || "-";
+
+  const cardBuyPrice = document.getElementById("cardItemBuyPrice");
+  if (cardBuyPrice) cardBuyPrice.textContent = item.buyPrice ? `${item.buyPrice} PLN` : "-";
+
+  const cardPrice = document.getElementById("cardItemPrice");
+  if (cardPrice) cardPrice.textContent = `${item.sellPrice || item.price || 0} PLN`;
+
+  const boxSoldDate = document.getElementById("boxItemSoldDate");
+  const cardSoldDate = document.getElementById("cardItemSoldDate");
+  const isSold = (item.status || "").toLowerCase() === "sprzedany";
+  if (isSold && (item.soldDate || item.dateSold)) {
+    if (boxSoldDate) boxSoldDate.classList.remove("hidden");
+    if (cardSoldDate) cardSoldDate.textContent = item.soldDate || item.dateSold;
+  } else {
+    if (boxSoldDate) boxSoldDate.classList.add("hidden");
+  }
 
   const badge = document.getElementById("cardStatusBadge");
   const btnSell = document.getElementById("btnMarkAsSold");
 
-  const isSold = (item.status || "").toLowerCase() === "sprzedany";
   if (isSold) {
     badge.textContent = "Sprzedany";
     badge.className = "card-status-pill sold";
@@ -941,7 +1196,7 @@ async function handleReprintCurrentItem() {
   const it = AppState.currentItem;
   try {
     showToast("Generowanie i drukowanie etykiety...");
-    const tsplBytes = await generateTsplBitmapPayload(it.id, it.model, it.size, it.condition, it.sellPrice);
+    const tsplBytes = await generateTsplBitmapPayload(it);
     await sendRawTsplToPrinter(tsplBytes);
     showToast("Etykieta wydrukowana!");
   } catch (err) {
@@ -980,13 +1235,20 @@ function initSettingsModal() {
     btnBitmap.addEventListener("click", async () => {
       try {
         showToast("Generowanie grafiki etykiety (BITMAP)...");
-        const payload = await generateTsplBitmapPayload(
-          "SP-00001",
-          "Narty Salomon X-Drive",
-          "165 cm",
-          "Ślizgi po serwisie",
-          "650"
-        );
+        const sampleData = {
+          id: "SP-00001",
+          category: "Narciarstwo",
+          rodzaj: "Narty",
+          size: "165 cm",
+          condition: "Ślizgi po serwisie",
+          opis: "Salomon X-Drive",
+          buyPrice: "400",
+          price: "650",
+          sellPrice: "650",
+          status: "Dostępny",
+          date: getTodayDate()
+        };
+        const payload = await generateTsplBitmapPayload(sampleData);
         showToast("Wysyłanie pikseli do głowicy...");
         await sendRawTsplToPrinter(payload);
         showToast("Wydruk BITMAP wysłany! Sprawdź etykietę ✅", 3000);
@@ -1090,14 +1352,22 @@ function initSettingsModal() {
       const data = await res.json();
       if (data.success && data.dictionaries) {
         AppState.dictionaries = {
-          categories: data.dictionaries.categories.length ? data.dictionaries.categories : AppState.dictionaries.categories,
-          models: data.dictionaries.models.length ? data.dictionaries.models : AppState.dictionaries.models,
-          sizes: AppState.dictionaries.sizes,
-          conditions: data.dictionaries.conditions.length ? data.dictionaries.conditions : AppState.dictionaries.conditions
+          categories: (data.dictionaries.categories && data.dictionaries.categories.length)
+            ? data.dictionaries.categories
+            : AppState.dictionaries.categories,
+          categoryRodzaje: (data.dictionaries.categoryRodzaje && Object.keys(data.dictionaries.categoryRodzaje).length)
+            ? data.dictionaries.categoryRodzaje
+            : AppState.dictionaries.categoryRodzaje,
+          rodzajRozmiary: (data.dictionaries.rodzajRozmiary && Object.keys(data.dictionaries.rodzajRozmiary).length)
+            ? data.dictionaries.rodzajRozmiary
+            : AppState.dictionaries.rodzajRozmiary,
+          conditions: (data.dictionaries.conditions && data.dictionaries.conditions.length)
+            ? data.dictionaries.conditions
+            : AppState.dictionaries.conditions
         };
-        localStorage.setItem("sport_dictionaries", JSON.stringify(AppState.dictionaries));
+        saveDictionaries();
         initComboboxes();
-        showToast("Słowniki zaktualizowane pomyślnie! 🔄");
+        showToast("Słowniki zaktualizowane pomyślnie z Google Sheets! 🔄");
       }
     } catch (err) {
       alert("Błąd synchronizacji: " + err.message);
@@ -1371,14 +1641,20 @@ function initTemplateEditor() {
   document.getElementById("btnPrintTemplateTest").addEventListener("click", async () => {
     try {
       showToast("Wysyłanie wydruku szablonu do Zenwire...");
-      const payload = await generateTsplBitmapPayload(
-        "SP-SZABLON",
-        "Narty Salomon X-Drive",
-        "165 cm",
-        "Po serwisie",
-        "650",
-        AppState.editorTemplate
-      );
+      const sampleData = {
+        id: "SP-SZABLON",
+        category: "Narciarstwo",
+        rodzaj: "Narty",
+        size: "165 cm",
+        condition: "Po serwisie",
+        opis: "Salomon X-Drive",
+        buyPrice: "400",
+        price: "650",
+        sellPrice: "650",
+        status: "Dostępny",
+        date: getTodayDate()
+      };
+      const payload = await generateTsplBitmapPayload(sampleData, AppState.editorTemplate);
       await sendRawTsplToPrinter(payload);
       showToast("Szablon wydrukowany! ✅");
     } catch (err) {
@@ -1424,11 +1700,16 @@ async function renderEditorCanvas() {
 
   const sampleData = {
     id: "SP-00042",
-    model: "Narty Salomon X-Drive",
+    category: "Narciarstwo",
+    rodzaj: "Narty",
     size: "165 cm",
     condition: "Po serwisie",
+    opis: "Salomon X-Drive",
+    buyPrice: "400",
     price: "650",
-    category: "Narciarstwo"
+    sellPrice: "650",
+    status: "Dostępny",
+    date: getTodayDate()
   };
 
   await preloadTemplateImages(AppState.editorTemplate);
