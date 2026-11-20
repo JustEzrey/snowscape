@@ -233,7 +233,7 @@ function getActiveTemplate() {
   return AppState.templates.find(t => t.id === AppState.activeTemplateId) || AppState.templates[0];
 }
 
-function updateLabelPreview() {
+async function updateLabelPreview() {
   const canvas = document.getElementById("intakePreviewCanvas");
   if (!canvas) return;
 
@@ -246,7 +246,9 @@ function updateLabelPreview() {
     category: document.getElementById("inputCategory").value.trim() || "Narciarstwo"
   };
 
-  renderTemplateToCanvas(canvas, getActiveTemplate(), currentData, false);
+  const activeTpl = getActiveTemplate();
+  await preloadTemplateImages(activeTpl);
+  renderTemplateToCanvas(canvas, activeTpl, currentData, false);
 }
 
 // ================= OBSŁUGA BLUETOOTH BLE (ZENWIRE TP-210) =================
@@ -444,6 +446,37 @@ function drawQrCodeToCanvas(ctx, text, startX, startY, targetSize) {
 }
 
 /**
+ * Asynchronicznie upewnia się, że wszystkie obrazy (logo/grafiki) w szablonie
+ * są w 100% zdekodowane i załadowane w pamięci przed rysowaniem lub wydrukiem.
+ */
+async function preloadTemplateImages(template) {
+  if (!template || !template.elements) return;
+  const promises = [];
+  for (const el of template.elements) {
+    if (el.type === "image" && el.dataUrl) {
+      if (!el._imgObj || !el._imgObj.complete || el._imgObj.naturalWidth === 0) {
+        const p = new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            el._imgObj = img;
+            resolve();
+          };
+          img.onerror = () => {
+            console.error("Błąd ładowania obrazu:", el.id);
+            resolve();
+          };
+          img.src = el.dataUrl;
+        });
+        promises.push(p);
+      }
+    }
+  }
+  if (promises.length > 0) {
+    await Promise.all(promises);
+  }
+}
+
+/**
  * Uniwersalna funkcja renderująca dowolny szablon z dowolnymi danymi na Canvasie.
  */
 function renderTemplateToCanvas(canvas, template, itemData, isEditor = false) {
@@ -554,6 +587,7 @@ async function generateTsplBitmapPayload(itemId, title, size, condition, price, 
   };
 
   const templateToUse = customTemplate || getActiveTemplate();
+  await preloadTemplateImages(templateToUse);
   renderTemplateToCanvas(canvas, templateToUse, itemData, false);
 
   // Konwersja Canvas -> 1-bitowa monochromatyczna tablica bajtów
@@ -1117,16 +1151,41 @@ function initTemplateEditor() {
 
   // Zapisz szablon
   document.getElementById("btnSaveTemplate").addEventListener("click", () => {
+    // Zachowaj referencje do _imgObj
+    const imgObjMap = new Map();
+    AppState.editorTemplate.elements.forEach(el => {
+      if (el.type === "image" && el._imgObj) {
+        imgObjMap.set(el.id, el._imgObj);
+      }
+    });
+
+    const savedTemplate = JSON.parse(JSON.stringify(AppState.editorTemplate));
+
     const idx = AppState.templates.findIndex(t => t.id === AppState.editorTemplate.id);
     if (idx !== -1) {
-      AppState.templates[idx] = JSON.parse(JSON.stringify(AppState.editorTemplate));
+      AppState.templates[idx] = savedTemplate;
     } else {
-      AppState.templates.push(JSON.parse(JSON.stringify(AppState.editorTemplate)));
+      AppState.templates.push(savedTemplate);
     }
+
+    // Przywróć referencje _imgObj do szablonów w pamięci
+    const targetTpl = AppState.templates[idx !== -1 ? idx : AppState.templates.length - 1];
+    targetTpl.elements.forEach(el => {
+      if (imgObjMap.has(el.id)) el._imgObj = imgObjMap.get(el.id);
+    });
+    AppState.editorTemplate.elements.forEach(el => {
+      if (imgObjMap.has(el.id)) el._imgObj = imgObjMap.get(el.id);
+    });
+
     // Ustaw od razu ten szablon jako aktywny do drukowania na przyjęciu
     AppState.activeTemplateId = AppState.editorTemplate.id;
-    localStorage.setItem("sport_templates", JSON.stringify(AppState.templates));
-    localStorage.setItem("sport_active_template_id", AppState.activeTemplateId);
+    try {
+      localStorage.setItem("sport_templates", JSON.stringify(AppState.templates));
+      localStorage.setItem("sport_active_template_id", AppState.activeTemplateId);
+    } catch (e) {
+      console.error("Błąd zapisu w localStorage:", e);
+    }
+
     populateTemplateSelects();
     updateLabelPreview();
     showToast(`Zapisano i aktywowano szablon "${AppState.editorTemplate.name}"! 💾`);
@@ -1211,7 +1270,10 @@ function initTemplateEditor() {
 
   // Narzędzia: Wgrywanie obrazka
   const fileInput = document.getElementById("fileImageUpload");
-  document.getElementById("btnAddImageElement").addEventListener("click", () => fileInput.click());
+  document.getElementById("btnAddImageElement").addEventListener("click", () => {
+    AppState.selectedElementId = null;
+    fileInput.click();
+  });
   document.getElementById("btnChangeImageFile").addEventListener("click", () => fileInput.click());
 
   fileInput.addEventListener("change", (e) => {
@@ -1232,6 +1294,8 @@ function initTemplateEditor() {
           w = Math.round(w * ratio);
           h = Math.round(h * ratio);
         }
+        w = Math.max(20, w);
+        h = Math.max(20, h);
 
         // Konwertuj obraz do ostrych czarno-białych pikseli (monochrom)
         const procCanvas = document.createElement("canvas");
@@ -1242,46 +1306,54 @@ function initTemplateEditor() {
         const imgData = procCtx.getImageData(0, 0, w, h);
         const d = imgData.data;
         for (let i = 0; i < d.length; i += 4) {
-          const lum = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
-          // Zwiększ kontrast dla głowicy termicznej
-          const val = lum < 140 ? 0 : 255;
-          d[i] = val;
-          d[i+1] = val;
-          d[i+2] = val;
-          // Jeśli przezroczysty, zrób biały
-          if (d[i+3] < 128) {
-            d[i] = 255; d[i+1] = 255; d[i+2] = 255; d[i+3] = 255;
+          if (d[i + 3] < 128) {
+            d[i] = 255;
+            d[i + 1] = 255;
+            d[i + 2] = 255;
+            d[i + 3] = 255;
+          } else {
+            const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+            const val = lum < 150 ? 0 : 255;
+            d[i] = val;
+            d[i + 1] = val;
+            d[i + 2] = val;
+            d[i + 3] = 255;
           }
         }
         procCtx.putImageData(imgData, 0, 0);
         const monoDataUrl = procCanvas.toDataURL("image/png");
 
-        if (AppState.selectedElementId && AppState.selectedElementId.startsWith("img_")) {
-          // Zmiana istniejącego
-          const existing = AppState.editorTemplate.elements.find(el => el.id === AppState.selectedElementId);
-          if (existing) {
-            existing.dataUrl = monoDataUrl;
-            existing._imgObj = null;
-            existing.width = w;
-            existing.height = h;
+        const preloadedImg = new Image();
+        preloadedImg.onload = () => {
+          if (AppState.selectedElementId && AppState.selectedElementId.startsWith("img_")) {
+            // Zmiana istniejącego
+            const existing = AppState.editorTemplate.elements.find(el => el.id === AppState.selectedElementId);
+            if (existing) {
+              existing.dataUrl = monoDataUrl;
+              existing._imgObj = preloadedImg;
+              existing.width = w;
+              existing.height = h;
+            }
+          } else {
+            // Dodaj nowy
+            const newImgEl = {
+              id: "img_" + Date.now(),
+              type: "image",
+              dataUrl: monoDataUrl,
+              _imgObj: preloadedImg,
+              x: 20,
+              y: 20,
+              width: w,
+              height: h
+            };
+            AppState.editorTemplate.elements.push(newImgEl);
+            AppState.selectedElementId = newImgEl.id;
           }
-        } else {
-          // Dodaj nowy
-          const newImgEl = {
-            id: "img_" + Date.now(),
-            type: "image",
-            dataUrl: monoDataUrl,
-            x: 20,
-            y: 20,
-            width: w,
-            height: h
-          };
-          AppState.editorTemplate.elements.push(newImgEl);
-          AppState.selectedElementId = newImgEl.id;
-        }
 
-        updateInspectorUI();
-        renderEditorCanvas();
+          updateInspectorUI();
+          renderEditorCanvas();
+        };
+        preloadedImg.src = monoDataUrl;
       };
       img.src = event.target.result;
     };
@@ -1346,7 +1418,7 @@ function populateTemplateSelects() {
   }
 }
 
-function renderEditorCanvas() {
+async function renderEditorCanvas() {
   const canvas = document.getElementById("templateEditorCanvas");
   if (!canvas || !AppState.editorTemplate) return;
 
@@ -1359,6 +1431,7 @@ function renderEditorCanvas() {
     category: "Narciarstwo"
   };
 
+  await preloadTemplateImages(AppState.editorTemplate);
   renderTemplateToCanvas(canvas, AppState.editorTemplate, sampleData, true);
 }
 
