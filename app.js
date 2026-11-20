@@ -666,21 +666,54 @@ function initSettingsModal() {
     showToast("Zapisano ustawienia!");
   });
 
-  // Testowy wydruk 50x30 mm z polskimi znakami (TSPL)
-  document.getElementById("btnTestPrint").addEventListener("click", async () => {
+  // Test A: TSPL (Standard DIRECTION 0 - bez obracania)
+  document.getElementById("btnTestTspl0").addEventListener("click", async () => {
     try {
-      showToast("Wysyłanie testu TSPL do Zenwire TP-210...");
-      const testBytes = buildTsplCommand(
-        "SP-TEST",
-        "Zażółć gęślą jaźń",
-        "Test 165cm",
-        "Ślizgi po serwisie",
-        "999"
-      );
-      await sendRawTsplToPrinter(testBytes);
-      showToast("Test TSPL wysłany! Sprawdź etykietę ✅");
+      showToast("Wysyłanie Testu A (TSPL DIRECTION 0)...");
+      const lines = [
+        "SIZE 48 mm,30 mm",
+        "GAP 2 mm,0 mm",
+        "DENSITY 15",
+        "DIRECTION 0",
+        "CLS",
+        "BOX 5,5,375,225,4",
+        `TEXT 20,25,"3",0,1,1,"ZENWIRE TSPL TEST"`,
+        `QRCODE 25,65,L,4,A,0,"SP-00001"`,
+        `TEXT 160,75,"3",0,1,1,"ID: SP-00001"`,
+        `TEXT 160,115,"2",0,1,1,"Narty Salomon"`,
+        `TEXT 160,155,"3",0,1,1,"CENA: 650 PLN"`,
+        "PRINT 1",
+        ""
+      ];
+      await sendRawTsplToPrinter(new TextEncoder().encode(lines.join("\r\n")));
+      showToast("Test A (TSPL) wysłany! ✅");
     } catch (err) {
-      alert("Błąd wydruku testowego: " + err.message);
+      alert("Błąd Testu A: " + err.message);
+    }
+  });
+
+  // Test B: CPCL (Często domyślny protokół mobilnych drukarek etykiet Zebra / HPRT)
+  document.getElementById("btnTestCpcl").addEventListener("click", async () => {
+    try {
+      showToast("Wysyłanie Testu B (CPCL)...");
+      const lines = [
+        "! 0 200 200 240 1",
+        "PAGE-WIDTH 384",
+        "BOX 5 5 375 225 4",
+        "TEXT 4 0 20 25 TEST CPCL ZENWIRE",
+        "B QR 25 75 M 2 U 4",
+        "MA,SP-00001",
+        "ENDQR",
+        "TEXT 4 0 160 80 ID: SP-00001",
+        "TEXT 4 0 160 120 CENA: 650 PLN",
+        "FORM",
+        "PRINT",
+        ""
+      ];
+      await sendRawTsplToPrinter(new TextEncoder().encode(lines.join("\r\n")));
+      showToast("Test B (CPCL) wysłany! Sprawdź etykietę ✅");
+    } catch (err) {
+      alert("Błąd Testu B: " + err.message);
     }
   });
 
