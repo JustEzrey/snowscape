@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1e293b">
   <title>Ewidencja Sprzętu Sportowego</title>
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
   <!-- Biblioteka skanera kodów QR z aparatu -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- Lokalny, 100% offline generator kodów QR -->
-  <script src="qrcode.js?v=7"></script>
+  <script src="qrcode.js?v=8"></script>
 </head>
 <body>
   <div class="app-container">
@@ -32,11 +32,15 @@
     <nav class="nav-tabs">
       <button class="tab-btn active" data-tab="tab-intake">
         <span class="tab-icon">📥</span>
-        <span>Przyjęcie na stan</span>
+        <span>Przyjęcie</span>
       </button>
       <button class="tab-btn" data-tab="tab-scanner">
         <span class="tab-icon">📷</span>
-        <span>Skaner / Sprzedaż</span>
+        <span>Skaner</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-templates">
+        <span class="tab-icon">🎨</span>
+        <span>Szablony</span>
       </button>
     </nav>
 
@@ -99,16 +103,13 @@
           <div class="label-preview-card">
             <div class="preview-header">
               <span>Podgląd etykiety (50x30 mm)</span>
-              <span class="preview-format">TSPL 203 DPI</span>
-            </div>
-            <div class="label-preview-box">
-              <div class="qr-mock" id="previewQr">QR</div>
-              <div class="label-text-mock">
-                <div class="prev-id" id="prevId">ID: SP-AUTO</div>
-                <div class="prev-title" id="prevTitle">Nazwa sprzętu</div>
-                <div class="prev-sub" id="prevDetails">Rozmiar / Stan</div>
-                <div class="prev-price" id="prevPrice">CENA: 0 PLN</div>
+              <div class="preview-template-pick">
+                <label for="selectActiveTemplate">Szablon:</label>
+                <select id="selectActiveTemplate" class="form-select-sm"></select>
               </div>
+            </div>
+            <div class="live-canvas-preview-container">
+              <canvas id="intakePreviewCanvas" width="384" height="240" class="live-preview-canvas"></canvas>
             </div>
           </div>
 
@@ -186,6 +187,130 @@
           </div>
         </div>
 
+      <!-- ================= ZAKŁADKA 3: EDYTOR SZABLONÓW ================= -->
+      <section id="tab-templates" class="tab-pane">
+        
+        <div class="template-manager-card">
+          
+          <!-- Pasek wyboru i zarządzania szablonami -->
+          <div class="template-select-bar">
+            <div class="select-wrapper">
+              <label for="selectEditorTemplate">Edytowany szablon:</label>
+              <select id="selectEditorTemplate" class="form-select"></select>
+            </div>
+            <div class="template-mgmt-btns">
+              <button type="button" class="btn-sm" id="btnNewTemplate" title="Nowy pusty szablon">➕ Nowy</button>
+              <button type="button" class="btn-sm btn-save" id="btnSaveTemplate" title="Zapisz zmiany w szablonie">💾 Zapisz</button>
+              <button type="button" class="btn-sm btn-delete" id="btnDeleteTemplate" title="Usuń ten szablon">🗑️</button>
+            </div>
+          </div>
+
+          <!-- Nazwa szablonu input -->
+          <div class="form-group" style="margin-top: 10px;">
+            <label for="inputTemplateName">Nazwa szablonu:</label>
+            <input type="text" id="inputTemplateName" class="form-input" placeholder="np. Standardowy z Logo">
+          </div>
+
+          <!-- Płótno Canvas do edycji (50x30 mm - 384x240 px) -->
+          <div class="editor-canvas-wrapper">
+            <div class="canvas-ruler-header">Etykieta 50 x 30 mm (384 x 240 px)</div>
+            <canvas id="templateEditorCanvas" width="384" height="240" class="editor-canvas"></canvas>
+            <div class="canvas-hint">💡 Kliknij element, aby go zaznaczyć i przesuwać palcem</div>
+          </div>
+
+          <!-- Pasek dodawania nowych elementów -->
+          <div class="editor-add-toolbar">
+            <button type="button" class="btn-tool" id="btnAddTextElement">➕ Dodaj Tekst</button>
+            <button type="button" class="btn-tool" id="btnAddImageElement">🖼️ Wgraj Logo / Grafikę</button>
+            <input type="file" id="fileImageUpload" accept="image/*" style="display: none;">
+            <button type="button" class="btn-tool" id="btnToggleBorder">🔲 Ramka: <span id="labelBorderStatus">WŁ</span></button>
+            <button type="button" class="btn-tool" id="btnToggleQr">📱 Kod QR: <span id="labelQrStatus">WŁ</span></button>
+          </div>
+
+          <!-- Inspektor zaznaczonego elementu -->
+          <div class="inspector-card" id="inspectorCard">
+            <div class="inspector-header">
+              <strong id="inspectorTitle">Edycja: Tekst</strong>
+              <button type="button" class="btn-text-danger" id="btnDeleteElement">Usuń ten element</button>
+            </div>
+
+            <!-- Pola tekstowe -->
+            <div id="inspectorTextControls">
+              <div class="form-group">
+                <label>Treść tekstu / Dynamiczne tagi:</label>
+                <input type="text" id="propTextContent" class="form-input" placeholder="np. CENA: {CENA} PLN">
+                <div class="tag-pills">
+                  <span class="tag-pill" data-tag="{ID}">+{ID}</span>
+                  <span class="tag-pill" data-tag="{MODEL}">+{MODEL}</span>
+                  <span class="tag-pill" data-tag="{CENA}">+{CENA}</span>
+                  <span class="tag-pill" data-tag="{ROZMIAR}">+{ROZMIAR}</span>
+                  <span class="tag-pill" data-tag="{STAN}">+{STAN}</span>
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="form-group">
+                  <label>Rozmiar czcionki (px):</label>
+                  <input type="number" id="propFontSize" class="form-input" min="10" max="60" step="2">
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; padding-top: 24px;">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="propFontBold">
+                    <span>Pogrubienie (Bold)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pola kodu QR -->
+            <div id="inspectorQrControls" class="hidden">
+              <div class="form-group">
+                <label>Rozmiar kodu QR (px):</label>
+                <input type="number" id="propQrSize" class="form-input" min="60" max="220" step="5">
+              </div>
+            </div>
+
+            <!-- Pola obrazka / logotypu -->
+            <div id="inspectorImageControls" class="hidden">
+              <div class="form-group">
+                <label>Wymiary grafiki:</label>
+                <div class="grid-2">
+                  <div>
+                    <small>Szerokość (px):</small>
+                    <input type="number" id="propImgWidth" class="form-input" min="15" max="384" step="5">
+                  </div>
+                  <div>
+                    <small>Wysokość (px):</small>
+                    <input type="number" id="propImgHeight" class="form-input" min="15" max="240" step="5">
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="btn-secondary full-width" id="btnChangeImageFile">Zmień plik graficzny</button>
+            </div>
+
+            <!-- Współrzędne X / Y dla każdego elementu -->
+            <div class="grid-2" style="margin-top: 8px;">
+              <div class="form-group">
+                <label>Pozycja X (w prawo):</label>
+                <input type="number" id="propCoordX" class="form-input" min="0" max="380">
+              </div>
+              <div class="form-group">
+                <label>Pozycja Y (w dół):</label>
+                <input type="number" id="propCoordY" class="form-input" min="0" max="235">
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Przycisk testowego wydruku aktualnego szablonu -->
+          <div style="margin-top: 14px;">
+            <button type="button" class="btn-primary" id="btnPrintTemplateTest">
+              🖨️ Wydrukuj ten szablon na Zenwire TP-210
+            </button>
+          </div>
+
+        </div>
+
       </section>
 
     </main>
@@ -238,6 +363,6 @@
 
   </div>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

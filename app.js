@@ -8,6 +8,56 @@
  *  - Baza danych Google Sheets (REST API)
  */
 
+// ================= DOMYŚLNE SZABLONY ETYKIET =================
+const DEFAULT_TEMPLATES = [
+  {
+    id: "tpl_standard",
+    name: "Standardowy z kodem QR",
+    hasBorder: true,
+    hasQr: true,
+    qrX: 15,
+    qrY: 52,
+    qrSize: 135,
+    elements: [
+      { id: "el_id", type: "text", text: "ID: {ID}", x: 15, y: 36, fontSize: 22, bold: true },
+      { id: "el_model", type: "text", text: "{MODEL}", x: 160, y: 75, fontSize: 22, bold: true },
+      { id: "el_sub", type: "text", text: "{ROZMIAR} / {STAN}", x: 160, y: 115, fontSize: 18, bold: false },
+      { id: "el_price", type: "text", text: "CENA: {CENA} PLN", x: 160, y: 175, fontSize: 26, bold: true }
+    ]
+  },
+  {
+    id: "tpl_big_price",
+    name: "Wyprzedaż / Duża Cena",
+    hasBorder: true,
+    hasQr: true,
+    qrX: 15,
+    qrY: 30,
+    qrSize: 170,
+    elements: [
+      { id: "el_promo", type: "text", text: "★ SUPER OKAZJA ★", x: 195, y: 40, fontSize: 20, bold: true },
+      { id: "el_model", type: "text", text: "{MODEL}", x: 195, y: 75, fontSize: 20, bold: false },
+      { id: "el_id", type: "text", text: "ID: {ID}", x: 195, y: 110, fontSize: 16, bold: false },
+      { id: "el_price", type: "text", text: "{CENA} PLN", x: 195, y: 170, fontSize: 34, bold: true }
+    ]
+  },
+  {
+    id: "tpl_logo_header",
+    name: "Z Nagłówkiem / Logo",
+    hasBorder: true,
+    hasQr: true,
+    qrX: 235,
+    qrY: 45,
+    qrSize: 140,
+    elements: [
+      { id: "el_brand", type: "text", text: "SPORT-SERVICE", x: 15, y: 35, fontSize: 22, bold: true },
+      { id: "el_model", type: "text", text: "{MODEL}", x: 15, y: 75, fontSize: 20, bold: true },
+      { id: "el_sub", type: "text", text: "{STAN} ({ROZMIAR})", x: 15, y: 110, fontSize: 17, bold: false },
+      { id: "el_price", type: "text", text: "{CENA} PLN", x: 15, y: 160, fontSize: 26, bold: true },
+      { id: "el_id", type: "text", text: "ID: {ID}", x: 15, y: 200, fontSize: 16, bold: false }
+    ]
+  }
+];
+
 // ================= STAN APLIKACJI =================
 const AppState = {
   printerDevice: null,
@@ -18,6 +68,17 @@ const AppState = {
   isCameraActive: false,
   currentItem: null,
   
+  // Szablony
+  templates: JSON.parse(localStorage.getItem("sport_templates")) || DEFAULT_TEMPLATES,
+  activeTemplateId: localStorage.getItem("sport_active_template_id") || "tpl_standard",
+  editorTemplate: null,
+  selectedElementId: null,
+  isDragging: false,
+  dragStartX: 0,
+  dragStartY: 0,
+  initialElementX: 0,
+  initialElementY: 0,
+
   // Domyślne słowniki (rozszerzane dynamicznie)
   dictionaries: JSON.parse(localStorage.getItem("sport_dictionaries")) || {
     categories: ["Narciarstwo", "Snowboard", "Kolarstwo", "Fitness", "Rolki / Łyżwy", "Turystyka"],
@@ -31,6 +92,7 @@ const AppState = {
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   initComboboxes();
+  initTemplateEditor();
   initFormPreviewListeners();
   initBluetoothEvents();
   initScannerEvents();
@@ -54,11 +116,17 @@ function initTabs() {
       const target = document.getElementById(btn.dataset.tab);
       if (target) target.classList.add("active");
 
-      // Auto-zarządzanie kamerą przy przełączaniu
+      // Auto-zarządzanie kamerą i edytorem przy przełączaniu
       if (btn.dataset.tab === "tab-scanner") {
         startCamera();
       } else {
         stopCamera();
+      }
+
+      if (btn.dataset.tab === "tab-templates") {
+        renderEditorCanvas();
+      } else if (btn.dataset.tab === "tab-intake") {
+        updateLabelPreview();
       }
     });
   });
@@ -149,23 +217,36 @@ function initFormPreviewListeners() {
     if (el) el.addEventListener("input", updateLabelPreview);
   });
 
+  const selectActive = document.getElementById("selectActiveTemplate");
+  if (selectActive) {
+    selectActive.addEventListener("change", (e) => {
+      AppState.activeTemplateId = e.target.value;
+      localStorage.setItem("sport_active_template_id", AppState.activeTemplateId);
+      updateLabelPreview();
+    });
+  }
+
   document.getElementById("btnSaveAndPrint").addEventListener("click", handleSaveAndPrint);
 }
 
+function getActiveTemplate() {
+  return AppState.templates.find(t => t.id === AppState.activeTemplateId) || AppState.templates[0];
+}
+
 function updateLabelPreview() {
-  const model = document.getElementById("inputModel").value || "Nazwa sprzętu";
-  const size = document.getElementById("inputSize").value || "";
-  const condition = document.getElementById("inputCondition").value || "";
-  const price = document.getElementById("inputSellPrice").value || "0";
+  const canvas = document.getElementById("intakePreviewCanvas");
+  if (!canvas) return;
 
-  document.getElementById("prevTitle").textContent = model;
-  
-  let details = [];
-  if (size) details.push(size);
-  if (condition) details.push(condition);
-  document.getElementById("prevDetails").textContent = details.join(" / ") || "Rozmiar / Stan";
+  const currentData = {
+    id: "SP-AUTO",
+    model: document.getElementById("inputModel").value.trim() || "Nazwa sprzętu",
+    size: document.getElementById("inputSize").value.trim() || "165 cm",
+    condition: document.getElementById("inputCondition").value.trim() || "Po serwisie",
+    price: document.getElementById("inputSellPrice").value.trim() || "0",
+    category: document.getElementById("inputCategory").value.trim() || "Narciarstwo"
+  };
 
-  document.getElementById("prevPrice").textContent = `CENA: ${price} PLN`;
+  renderTemplateToCanvas(canvas, getActiveTemplate(), currentData, false);
 }
 
 // ================= OBSŁUGA BLUETOOTH BLE (ZENWIRE TP-210) =================
@@ -363,15 +444,98 @@ function drawQrCodeToCanvas(ctx, text, startX, startY, targetSize) {
 }
 
 /**
- * Renderuje etykietę 50x30 mm na ukrytym Canvasie HTML5,
- * konwertuje na 1-bitową monochromatyczną bitmapę i generuje komendę TSPL BITMAP.
- * 
- * ZALETY TRYBU BITMAP:
- * 1. Działa na KAŻDEJ drukarce, nawet jeśli nie ma czcionek w pamięci ROM!
- * 2. 100% polskie znaki (ą, ę, ś, ć, ł, ó, ż, ź) renderowane z telefonu.
- * 3. Kod QR generowany bezpośrednio w aplikacji jako czyste piksele.
+ * Uniwersalna funkcja renderująca dowolny szablon z dowolnymi danymi na Canvasie.
  */
-async function generateTsplBitmapPayload(itemId, title, size, condition, price) {
+function renderTemplateToCanvas(canvas, template, itemData, isEditor = false) {
+  if (!canvas || !template) return;
+  const ctx = canvas.getContext("2d");
+  const WIDTH_DOTS = 384;
+  const HEIGHT_DOTS = 240;
+
+  // 1. Czyste białe tło
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, WIDTH_DOTS, HEIGHT_DOTS);
+
+  // 2. Ramka zewnętrzna
+  if (template.hasBorder) {
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(3, 3, WIDTH_DOTS - 6, HEIGHT_DOTS - 6);
+  }
+
+  // 3. Kod QR (jeśli włączony w szablonie)
+  if (template.hasQr) {
+    const qrSize = template.qrSize || 135;
+    const qrX = template.qrX !== undefined ? template.qrX : 15;
+    const qrY = template.qrY !== undefined ? template.qrY : 52;
+    drawQrCodeToCanvas(ctx, itemData.id || "SP-00001", qrX, qrY, qrSize);
+
+    if (isEditor && AppState.selectedElementId === "__qr") {
+      drawSelectionBox(ctx, qrX, qrY, qrSize, qrSize);
+    }
+  }
+
+  // 4. Elementy (teksty, obrazy)
+  if (template.elements && Array.isArray(template.elements)) {
+    for (const el of template.elements) {
+      if (el.type === "text") {
+        // Podstawienie zmiennych dynamicznych
+        let text = el.text || "";
+        text = text.replace(/\{ID\}/gi, itemData.id || "SP-00001");
+        text = text.replace(/\{MODEL\}/gi, itemData.model || "Nazwa sprzętu");
+        text = text.replace(/\{ROZMIAR\}/gi, itemData.size || "165 cm");
+        text = text.replace(/\{STAN\}/gi, itemData.condition || "Po serwisie");
+        text = text.replace(/\{CENA\}/gi, itemData.price || "0");
+        text = text.replace(/\{KATEGORIA\}/gi, itemData.category || "Sprzęt");
+
+        ctx.fillStyle = "#000000";
+        ctx.textAlign = "left";
+        const fontSize = el.fontSize || 20;
+        ctx.font = (el.bold ? "bold " : "") + fontSize + "px Arial, sans-serif";
+        ctx.fillText(text, el.x, el.y);
+
+        if (isEditor && AppState.selectedElementId === el.id) {
+          const metrics = ctx.measureText(text);
+          const w = metrics.width;
+          const h = fontSize;
+          drawSelectionBox(ctx, el.x - 2, el.y - h, w + 4, h + 4);
+        }
+      } else if (el.type === "image" && el.dataUrl) {
+        if (!el._imgObj) {
+          el._imgObj = new Image();
+          el._imgObj.src = el.dataUrl;
+          el._imgObj.onload = () => {
+            if (isEditor) renderEditorCanvas();
+            else updateLabelPreview();
+          };
+        }
+        if (el._imgObj.complete && el._imgObj.naturalWidth > 0) {
+          ctx.drawImage(el._imgObj, el.x, el.y, el.width, el.height);
+        }
+        if (isEditor && AppState.selectedElementId === el.id) {
+          drawSelectionBox(ctx, el.x, el.y, el.width, el.height);
+        }
+      }
+    }
+  }
+}
+
+function drawSelectionBox(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = "#2563eb";
+  ctx.fillRect(x + w - 4, y + h - 4, 8, 8);
+  ctx.restore();
+}
+
+/**
+ * Renderuje etykietę 50x30 mm na ukrytym Canvasie HTML5 w oparciu o AKTYWNY SZABLON,
+ * konwertuje na 1-bitową monochromatyczną bitmapę i generuje komendę TSPL BITMAP.
+ */
+async function generateTsplBitmapPayload(itemId, title, size, condition, price, customTemplate = null) {
   const WIDTH_DOTS = 384; // 48 mm przy 203 DPI (podzielne przez 8: 48 bajtów)
   const HEIGHT_DOTS = 240; // 30 mm przy 203 DPI
   const WIDTH_BYTES = WIDTH_DOTS / 8; // 48 bajtów na wiersz
@@ -379,47 +543,22 @@ async function generateTsplBitmapPayload(itemId, title, size, condition, price) 
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH_DOTS;
   canvas.height = HEIGHT_DOTS;
-  const ctx = canvas.getContext("2d");
 
-  // 1. Białe tło
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, WIDTH_DOTS, HEIGHT_DOTS);
+  const itemData = {
+    id: itemId,
+    model: title,
+    size: size,
+    condition: condition,
+    price: price,
+    category: document.getElementById("inputCategory") ? document.getElementById("inputCategory").value : "Sprzęt"
+  };
 
-  // 2. Czarna ramka dookoła
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(3, 3, WIDTH_DOTS - 6, HEIGHT_DOTS - 6);
+  const templateToUse = customTemplate || getActiveTemplate();
+  renderTemplateToCanvas(canvas, templateToUse, itemData, false);
 
-  // 3. Kod QR rysowany bezpośrednio jako ostre piksele na płótnie
-  drawQrCodeToCanvas(ctx, itemId, 15, 52, 135);
-
-  // 4. Rysowanie tekstów bezpośrednio na Canvasie
-  ctx.fillStyle = "#000000";
-  ctx.textAlign = "left";
-
-  // ID
-  ctx.font = "bold 22px Arial, sans-serif";
-  ctx.fillText("ID: " + itemId, 15, 36);
-
-  // Nazwa / Model
-  ctx.font = "bold 22px Arial, sans-serif";
-  let displayTitle = title || "Nazwa sprzętu";
-  if (displayTitle.length > 17) displayTitle = displayTitle.substring(0, 16) + "…";
-  ctx.fillText(displayTitle, 160, 75);
-
-  // Rozmiar / Stan
-  ctx.font = "18px Arial, sans-serif";
-  let sub = [size, condition].filter(Boolean).join(" / ") || "Stan / Rozmiar";
-  if (sub.length > 20) sub = sub.substring(0, 19) + "…";
-  ctx.fillText(sub, 160, 115);
-
-  // Cena
-  ctx.font = "bold 26px Arial, sans-serif";
-  ctx.fillText("CENA: " + price + " PLN", 160, 175);
-
-  // 5. Konwersja Canvas -> 1-bitowa monochromatyczna tablica bajtów
+  // Konwersja Canvas -> 1-bitowa monochromatyczna tablica bajtów
   // DLA ZENWIRE TP-210: bit 1 = brak grzania (BIAŁY), bit 0 = grzanie (CZARNY)
-  const imgData = ctx.getImageData(0, 0, WIDTH_DOTS, HEIGHT_DOTS);
+  const imgData = canvas.getContext("2d").getImageData(0, 0, WIDTH_DOTS, HEIGHT_DOTS);
   const pixels = imgData.data;
   const bitmapBytes = new Uint8Array(WIDTH_BYTES * HEIGHT_DOTS);
 
@@ -431,7 +570,7 @@ async function generateTsplBitmapPayload(itemId, title, size, condition, price) 
         const idx = (y * WIDTH_DOTS + x) * 4;
         const lum = pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114;
         
-        // Jeśli piksel na canvasie jest czarny (napis, kod QR, ramka):
+        // Jeśli piksel na canvasie jest czarny:
         // Zerujemy bit (0 = igła głowicy rozgrzewa się i wypala czarny punkt)
         if (lum < 128) {
           byteVal &= ~(0x80 >> bit);
@@ -920,6 +1059,544 @@ function initSettingsModal() {
       alert("Błąd synchronizacji: " + err.message);
     }
   });
+}
+
+// ================= EDYTOR SZABLONÓW ETYKIET =================
+function initTemplateEditor() {
+  const canvas = document.getElementById("templateEditorCanvas");
+  if (!canvas) return;
+
+  // Zainicjalizuj szablon edytora jako głęboką kopię aktywnego szablonu
+  const currentActive = getActiveTemplate();
+  AppState.editorTemplate = JSON.parse(JSON.stringify(currentActive));
+
+  // Zsynchronizuj selecty szablonów
+  populateTemplateSelects();
+
+  // Zdarzenia wyboru szablonu w edytorze
+  const selectEditor = document.getElementById("selectEditorTemplate");
+  if (selectEditor) {
+    selectEditor.addEventListener("change", (e) => {
+      const found = AppState.templates.find(t => t.id === e.target.value);
+      if (found) {
+        AppState.editorTemplate = JSON.parse(JSON.stringify(found));
+        AppState.selectedElementId = null;
+        updateInspectorUI();
+        renderEditorCanvas();
+      }
+    });
+  }
+
+  // Zmiana nazwy szablonu
+  const inputName = document.getElementById("inputTemplateName");
+  if (inputName) {
+    inputName.value = AppState.editorTemplate.name || "";
+    inputName.addEventListener("input", (e) => {
+      AppState.editorTemplate.name = e.target.value;
+    });
+  }
+
+  // Zapisz szablon
+  document.getElementById("btnSaveTemplate").addEventListener("click", () => {
+    const idx = AppState.templates.findIndex(t => t.id === AppState.editorTemplate.id);
+    if (idx !== -1) {
+      AppState.templates[idx] = JSON.parse(JSON.stringify(AppState.editorTemplate));
+    } else {
+      AppState.templates.push(JSON.parse(JSON.stringify(AppState.editorTemplate)));
+    }
+    localStorage.setItem("sport_templates", JSON.stringify(AppState.templates));
+    populateTemplateSelects();
+    updateLabelPreview();
+    showToast(`Zapisano szablon "${AppState.editorTemplate.name}"! 💾`);
+  });
+
+  // Nowy pusty szablon
+  document.getElementById("btnNewTemplate").addEventListener("click", () => {
+    const newId = "tpl_" + Date.now();
+    const newTpl = {
+      id: newId,
+      name: "Nowy szablon",
+      hasBorder: true,
+      hasQr: true,
+      qrX: 15,
+      qrY: 52,
+      qrSize: 135,
+      elements: [
+        { id: "el_1", type: "text", text: "ID: {ID}", x: 15, y: 36, fontSize: 22, bold: true },
+        { id: "el_2", type: "text", text: "{MODEL}", x: 160, y: 75, fontSize: 22, bold: true },
+        { id: "el_3", type: "text", text: "CENA: {CENA} PLN", x: 160, y: 175, fontSize: 26, bold: true }
+      ]
+    };
+    AppState.templates.push(newTpl);
+    AppState.editorTemplate = JSON.parse(JSON.stringify(newTpl));
+    AppState.activeTemplateId = newId;
+    localStorage.setItem("sport_templates", JSON.stringify(AppState.templates));
+    localStorage.setItem("sport_active_template_id", newId);
+    populateTemplateSelects();
+    renderEditorCanvas();
+    showToast("Utworzono nowy szablon!");
+  });
+
+  // Usuń szablon
+  document.getElementById("btnDeleteTemplate").addEventListener("click", () => {
+    if (AppState.templates.length <= 1) {
+      alert("Musisz posiadać przynajmniej jeden szablon!");
+      return;
+    }
+    if (!confirm(`Czy na pewno usunąć szablon "${AppState.editorTemplate.name}"?`)) return;
+
+    AppState.templates = AppState.templates.filter(t => t.id !== AppState.editorTemplate.id);
+    AppState.activeTemplateId = AppState.templates[0].id;
+    AppState.editorTemplate = JSON.parse(JSON.stringify(AppState.templates[0]));
+    localStorage.setItem("sport_templates", JSON.stringify(AppState.templates));
+    localStorage.setItem("sport_active_template_id", AppState.activeTemplateId);
+    populateTemplateSelects();
+    renderEditorCanvas();
+    updateLabelPreview();
+    showToast("Szablon usunięty!");
+  });
+
+  // Narzędzia: Dodaj tekst
+  document.getElementById("btnAddTextElement").addEventListener("click", () => {
+    const newEl = {
+      id: "el_" + Date.now(),
+      type: "text",
+      text: "Nowy tekst",
+      x: 30,
+      y: 100,
+      fontSize: 20,
+      bold: false
+    };
+    AppState.editorTemplate.elements.push(newEl);
+    AppState.selectedElementId = newEl.id;
+    updateInspectorUI();
+    renderEditorCanvas();
+  });
+
+  // Narzędzia: Przełącznik ramki
+  document.getElementById("btnToggleBorder").addEventListener("click", () => {
+    AppState.editorTemplate.hasBorder = !AppState.editorTemplate.hasBorder;
+    document.getElementById("labelBorderStatus").textContent = AppState.editorTemplate.hasBorder ? "WŁ" : "WYŁ";
+    renderEditorCanvas();
+  });
+
+  // Narzędzia: Przełącznik kodu QR
+  document.getElementById("btnToggleQr").addEventListener("click", () => {
+    AppState.editorTemplate.hasQr = !AppState.editorTemplate.hasQr;
+    document.getElementById("labelQrStatus").textContent = AppState.editorTemplate.hasQr ? "WŁ" : "WYŁ";
+    renderEditorCanvas();
+  });
+
+  // Narzędzia: Wgrywanie obrazka
+  const fileInput = document.getElementById("fileImageUpload");
+  document.getElementById("btnAddImageElement").addEventListener("click", () => fileInput.click());
+  document.getElementById("btnChangeImageFile").addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Skalowanie proporcjonalne do maks. 120 px szerokości
+        let w = img.width;
+        let h = img.height;
+        const maxW = 120;
+        const maxH = 80;
+        if (w > maxW || h > maxH) {
+          const ratio = Math.min(maxW / w, maxH / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+
+        // Konwertuj obraz do ostrych czarno-białych pikseli (monochrom)
+        const procCanvas = document.createElement("canvas");
+        procCanvas.width = w;
+        procCanvas.height = h;
+        const procCtx = procCanvas.getContext("2d");
+        procCtx.drawImage(img, 0, 0, w, h);
+        const imgData = procCtx.getImageData(0, 0, w, h);
+        const d = imgData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const lum = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+          // Zwiększ kontrast dla głowicy termicznej
+          const val = lum < 140 ? 0 : 255;
+          d[i] = val;
+          d[i+1] = val;
+          d[i+2] = val;
+          // Jeśli przezroczysty, zrób biały
+          if (d[i+3] < 128) {
+            d[i] = 255; d[i+1] = 255; d[i+2] = 255; d[i+3] = 255;
+          }
+        }
+        procCtx.putImageData(imgData, 0, 0);
+        const monoDataUrl = procCanvas.toDataURL("image/png");
+
+        if (AppState.selectedElementId && AppState.selectedElementId.startsWith("img_")) {
+          // Zmiana istniejącego
+          const existing = AppState.editorTemplate.elements.find(el => el.id === AppState.selectedElementId);
+          if (existing) {
+            existing.dataUrl = monoDataUrl;
+            existing._imgObj = null;
+            existing.width = w;
+            existing.height = h;
+          }
+        } else {
+          // Dodaj nowy
+          const newImgEl = {
+            id: "img_" + Date.now(),
+            type: "image",
+            dataUrl: monoDataUrl,
+            x: 20,
+            y: 20,
+            width: w,
+            height: h
+          };
+          AppState.editorTemplate.elements.push(newImgEl);
+          AppState.selectedElementId = newImgEl.id;
+        }
+
+        updateInspectorUI();
+        renderEditorCanvas();
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = "";
+  });
+
+  // Inspektor: Zdarzenia pól
+  setupInspectorListeners();
+
+  // Obsługa przeciągania myszą / palcem po Canvasie
+  setupCanvasPointerEvents(canvas);
+
+  // Wydruk testowy szablonu
+  document.getElementById("btnPrintTemplateTest").addEventListener("click", async () => {
+    try {
+      showToast("Wysyłanie wydruku szablonu do Zenwire...");
+      const payload = await generateTsplBitmapPayload(
+        "SP-SZABLON",
+        "Narty Salomon X-Drive",
+        "165 cm",
+        "Po serwisie",
+        "650",
+        AppState.editorTemplate
+      );
+      await sendRawTsplToPrinter(payload);
+      showToast("Szablon wydrukowany! ✅");
+    } catch (err) {
+      alert("Błąd wydruku szablonu: " + err.message);
+    }
+  });
+
+  // Pierwszy render
+  renderEditorCanvas();
+}
+
+function populateTemplateSelects() {
+  const selectEditor = document.getElementById("selectEditorTemplate");
+  const selectActive = document.getElementById("selectActiveTemplate");
+  if (!selectEditor || !selectActive) return;
+
+  selectEditor.innerHTML = "";
+  selectActive.innerHTML = "";
+
+  AppState.templates.forEach(t => {
+    const opt1 = document.createElement("option");
+    opt1.value = t.id;
+    opt1.textContent = t.name;
+    if (AppState.editorTemplate && AppState.editorTemplate.id === t.id) opt1.selected = true;
+    selectEditor.appendChild(opt1);
+
+    const opt2 = document.createElement("option");
+    opt2.value = t.id;
+    opt2.textContent = t.name;
+    if (AppState.activeTemplateId === t.id) opt2.selected = true;
+    selectActive.appendChild(opt2);
+  });
+
+  const inputName = document.getElementById("inputTemplateName");
+  if (inputName && AppState.editorTemplate) {
+    inputName.value = AppState.editorTemplate.name;
+  }
+}
+
+function renderEditorCanvas() {
+  const canvas = document.getElementById("templateEditorCanvas");
+  if (!canvas || !AppState.editorTemplate) return;
+
+  const sampleData = {
+    id: "SP-00042",
+    model: "Narty Salomon X-Drive",
+    size: "165 cm",
+    condition: "Po serwisie",
+    price: "650",
+    category: "Narciarstwo"
+  };
+
+  renderTemplateToCanvas(canvas, AppState.editorTemplate, sampleData, true);
+}
+
+function updateInspectorUI() {
+  const card = document.getElementById("inspectorCard");
+  const textControls = document.getElementById("inspectorTextControls");
+  const imageControls = document.getElementById("inspectorImageControls");
+  const qrControls = document.getElementById("inspectorQrControls");
+  const title = document.getElementById("inspectorTitle");
+
+  if (!AppState.selectedElementId) {
+    card.style.opacity = "0.5";
+    card.style.pointerEvents = "none";
+    title.textContent = "Brak zaznaczonego elementu (kliknij na etykiecie)";
+    return;
+  }
+
+  card.style.opacity = "1";
+  card.style.pointerEvents = "auto";
+
+  if (AppState.selectedElementId === "__qr") {
+    title.textContent = "Edycja: Kod QR";
+    textControls.classList.add("hidden");
+    imageControls.classList.add("hidden");
+    qrControls.classList.remove("hidden");
+    document.getElementById("propQrSize").value = AppState.editorTemplate.qrSize || 135;
+    document.getElementById("propCoordX").value = AppState.editorTemplate.qrX !== undefined ? AppState.editorTemplate.qrX : 15;
+    document.getElementById("propCoordY").value = AppState.editorTemplate.qrY !== undefined ? AppState.editorTemplate.qrY : 52;
+    return;
+  }
+
+  const el = AppState.editorTemplate.elements.find(e => e.id === AppState.selectedElementId);
+  if (!el) return;
+
+  document.getElementById("propCoordX").value = el.x;
+  document.getElementById("propCoordY").value = el.y;
+
+  if (el.type === "text") {
+    title.textContent = "Edycja: Tekst / Zmienna";
+    textControls.classList.remove("hidden");
+    imageControls.classList.add("hidden");
+    qrControls.classList.add("hidden");
+
+    document.getElementById("propTextContent").value = el.text;
+    document.getElementById("propFontSize").value = el.fontSize || 20;
+    document.getElementById("propFontBold").checked = !!el.bold;
+  } else if (el.type === "image") {
+    title.textContent = "Edycja: Logo / Grafika";
+    textControls.classList.add("hidden");
+    imageControls.classList.remove("hidden");
+    qrControls.classList.add("hidden");
+
+    document.getElementById("propImgWidth").value = el.width;
+    document.getElementById("propImgHeight").value = el.height;
+  }
+}
+
+function setupInspectorListeners() {
+  // Zmiana tekstu
+  const textInput = document.getElementById("propTextContent");
+  textInput.addEventListener("input", (e) => {
+    const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+    if (el && el.type === "text") {
+      el.text = e.target.value;
+      renderEditorCanvas();
+    }
+  });
+
+  // Dodawanie tagów (+{ID}, +{CENA} itp.)
+  document.querySelectorAll(".tag-pill").forEach(pill => {
+    pill.addEventListener("click", () => {
+      const tag = pill.dataset.tag;
+      const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+      if (el && el.type === "text") {
+        textInput.value += (textInput.value ? " " : "") + tag;
+        el.text = textInput.value;
+        renderEditorCanvas();
+      }
+    });
+  });
+
+  // Rozmiar czcionki
+  document.getElementById("propFontSize").addEventListener("input", (e) => {
+    const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+    if (el && el.type === "text") {
+      el.fontSize = parseInt(e.target.value, 10) || 20;
+      renderEditorCanvas();
+    }
+  });
+
+  // Pogrubienie
+  document.getElementById("propFontBold").addEventListener("change", (e) => {
+    const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+    if (el && el.type === "text") {
+      el.bold = e.target.checked;
+      renderEditorCanvas();
+    }
+  });
+
+  // Wymiary obrazka
+  document.getElementById("propImgWidth").addEventListener("input", (e) => {
+    const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+    if (el && el.type === "image") {
+      el.width = parseInt(e.target.value, 10) || 50;
+      renderEditorCanvas();
+    }
+  });
+  document.getElementById("propImgHeight").addEventListener("input", (e) => {
+    const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+    if (el && el.type === "image") {
+      el.height = parseInt(e.target.value, 10) || 50;
+      renderEditorCanvas();
+    }
+  });
+
+  // Rozmiar QR
+  document.getElementById("propQrSize").addEventListener("input", (e) => {
+    if (AppState.selectedElementId === "__qr") {
+      AppState.editorTemplate.qrSize = parseInt(e.target.value, 10) || 135;
+      renderEditorCanvas();
+    }
+  });
+
+  // Współrzędne X / Y
+  document.getElementById("propCoordX").addEventListener("input", (e) => {
+    const val = parseInt(e.target.value, 10) || 0;
+    if (AppState.selectedElementId === "__qr") {
+      AppState.editorTemplate.qrX = val;
+    } else {
+      const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+      if (el) el.x = val;
+    }
+    renderEditorCanvas();
+  });
+  document.getElementById("propCoordY").addEventListener("input", (e) => {
+    const val = parseInt(e.target.value, 10) || 0;
+    if (AppState.selectedElementId === "__qr") {
+      AppState.editorTemplate.qrY = val;
+    } else {
+      const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+      if (el) el.y = val;
+    }
+    renderEditorCanvas();
+  });
+
+  // Usunięcie elementu
+  document.getElementById("btnDeleteElement").addEventListener("click", () => {
+    if (!AppState.selectedElementId) return;
+    if (AppState.selectedElementId === "__qr") {
+      AppState.editorTemplate.hasQr = false;
+      document.getElementById("labelQrStatus").textContent = "WYŁ";
+      AppState.selectedElementId = null;
+    } else {
+      AppState.editorTemplate.elements = AppState.editorTemplate.elements.filter(x => x.id !== AppState.selectedElementId);
+      AppState.selectedElementId = null;
+    }
+    updateInspectorUI();
+    renderEditorCanvas();
+  });
+}
+
+function setupCanvasPointerEvents(canvas) {
+  function getCanvasCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const scaleX = 384 / rect.width;
+    const scaleY = 240 / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  function handlePointerDown(e) {
+    const pos = getCanvasCoords(e);
+    const tpl = AppState.editorTemplate;
+    if (!tpl) return;
+
+    let hitId = null;
+
+    // 1. Sprawdź elementy tekstowe i obrazy (od końca)
+    const ctx = canvas.getContext("2d");
+    for (let i = tpl.elements.length - 1; i >= 0; i--) {
+      const el = tpl.elements[i];
+      if (el.type === "text") {
+        ctx.font = (el.bold ? "bold " : "") + (el.fontSize || 20) + "px Arial, sans-serif";
+        const w = ctx.measureText(el.text).width;
+        const h = el.fontSize || 20;
+        // Bounding box: [el.x - 4, el.y - h, w + 8, h + 4]
+        if (pos.x >= el.x - 6 && pos.x <= el.x + w + 6 && pos.y >= el.y - h - 4 && pos.y <= el.y + 4) {
+          hitId = el.id;
+          AppState.initialElementX = el.x;
+          AppState.initialElementY = el.y;
+          break;
+        }
+      } else if (el.type === "image") {
+        if (pos.x >= el.x && pos.x <= el.x + el.width && pos.y >= el.y && pos.y <= el.y + el.height) {
+          hitId = el.id;
+          AppState.initialElementX = el.x;
+          AppState.initialElementY = el.y;
+          break;
+        }
+      }
+    }
+
+    // 2. Jeśli nie kliknięto elementu, sprawdź kod QR
+    if (!hitId && tpl.hasQr) {
+      const qrX = tpl.qrX !== undefined ? tpl.qrX : 15;
+      const qrY = tpl.qrY !== undefined ? tpl.qrY : 52;
+      const qrSize = tpl.qrSize || 135;
+      if (pos.x >= qrX && pos.x <= qrX + qrSize && pos.y >= qrY && pos.y <= qrY + qrSize) {
+        hitId = "__qr";
+        AppState.initialElementX = qrX;
+        AppState.initialElementY = qrY;
+      }
+    }
+
+    AppState.selectedElementId = hitId;
+    if (hitId) {
+      AppState.isDragging = true;
+      AppState.dragStartX = pos.x;
+      AppState.dragStartY = pos.y;
+    }
+
+    updateInspectorUI();
+    renderEditorCanvas();
+  }
+
+  function handlePointerMove(e) {
+    if (!AppState.isDragging || !AppState.selectedElementId) return;
+    const pos = getCanvasCoords(e);
+    const deltaX = Math.round(pos.x - AppState.dragStartX);
+    const deltaY = Math.round(pos.y - AppState.dragStartY);
+
+    if (AppState.selectedElementId === "__qr") {
+      AppState.editorTemplate.qrX = Math.max(0, Math.min(384 - (AppState.editorTemplate.qrSize || 135), AppState.initialElementX + deltaX));
+      AppState.editorTemplate.qrY = Math.max(0, Math.min(240 - (AppState.editorTemplate.qrSize || 135), AppState.initialElementY + deltaY));
+      document.getElementById("propCoordX").value = AppState.editorTemplate.qrX;
+      document.getElementById("propCoordY").value = AppState.editorTemplate.qrY;
+    } else {
+      const el = AppState.editorTemplate.elements.find(x => x.id === AppState.selectedElementId);
+      if (el) {
+        el.x = Math.max(0, Math.min(380, AppState.initialElementX + deltaX));
+        el.y = Math.max(10, Math.min(235, AppState.initialElementY + deltaY));
+        document.getElementById("propCoordX").value = el.x;
+        document.getElementById("propCoordY").value = el.y;
+      }
+    }
+
+    renderEditorCanvas();
+  }
+
+  function handlePointerUp() {
+    AppState.isDragging = false;
+  }
+
+  canvas.addEventListener("pointerdown", handlePointerDown);
+  window.addEventListener("pointermove", handlePointerMove);
+  window.addEventListener("pointerup", handlePointerUp);
 }
 
 // ================= POWIADOMIENIA (TOAST) =================
